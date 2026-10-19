@@ -59,12 +59,34 @@
 
   <dialog id="settings-dialog" aria-labelledby="settings-title"><div class="dialog-heading"><span class="eyebrow">Your little space</span><button class="icon-button close-dialog" aria-label="Close"><svg class="ui-icon" viewBox="0 0 24 24" aria-hidden="true" focusable="false"><path d="m6 6 12 12M18 6 6 18"/></svg></button></div><h2 id="settings-title">Settings.</h2>
     <div id="session-settings" hidden>
+      <section id="automation-settings" class="settings-section" hidden><h3>Automatic phases</h3>
+        <p class="dialog-copy">Follow your own timing. Automatic phases are estimates; you can change phase whenever you need.</p>
+        <form id="automation-form">
+          <label class="check-label"><input id="auto-enabled" type="checkbox"> Switch phases automatically</label>
+          <fieldset id="auto-fields" disabled>
+            <legend>Days in each phase</legend>
+            <div class="duration-grid">
+              <label for="auto-menstrual">Menstrual 😭<input id="auto-menstrual" type="number" min="1" max="90" step="1" inputmode="numeric" required></label>
+              <label for="auto-follicular">Follicular 🤗<input id="auto-follicular" type="number" min="1" max="90" step="1" inputmode="numeric" required></label>
+              <label for="auto-ovulatory">Ovulating 😽<input id="auto-ovulatory" type="number" min="1" max="90" step="1" inputmode="numeric" required></label>
+              <label for="auto-luteal">Luteal 🤬<input id="auto-luteal" type="number" min="1" max="90" step="1" inputmode="numeric" required></label>
+            </div>
+            <label id="auto-start-label" for="auto-start">Current phase started</label><input id="auto-start" type="date" required>
+            <label for="auto-timezone">Time zone</label><input id="auto-timezone" type="text" placeholder="Europe/Copenhagen" autocomplete="off" spellcheck="false" required>
+            <label class="check-label"><input id="auto-reminders" type="checkbox"> Remind me the day before a change</label>
+          </fieldset>
+          <p class="small-note">Checked daily in the morning in Denmark. A manual change starts that phase’s duration from today. Saving a past start date catches up to today’s estimated phase. You can pause this anytime.</p>
+          <button id="auto-save" class="button secondary" type="submit">Save schedule</button>
+        </form>
+        <button id="owner-enable-push" class="button secondary" hidden>Enable reminders on this device</button>
+        <p id="auto-notification-hint" class="small-note"></p>
+      </section>
       <section class="settings-section"><h3 id="role-label">Sharing</h3><p id="sharing-label" class="dialog-copy"></p><button id="invite" class="button secondary">Create partner invitation</button><div id="invite-result" hidden><label for="invite-link">Single-use invitation</label><input id="invite-link" readonly><p id="invite-expiry" class="small-note"></p><button id="copy-invite" class="button secondary">Copy invitation</button><button id="share-invite" class="text-button">Share invitation</button></div><button id="disconnect" class="text-button danger" hidden>Disconnect partner</button></section>
       <section id="notification-settings" class="settings-section" hidden><h3>Notifications</h3><p id="notification-status" class="dialog-copy"></p><button id="disable-push" class="button secondary">Turn off on this device</button></section>
       <section class="settings-section"><h3>Keep your access</h3><p class="dialog-copy">Save your private access key somewhere safe before changing phones or clearing browser data. It grants access to this cycle.</p><button id="copy-key" class="button secondary">Copy private access key</button><button id="sign-out" class="text-button">Forget this device</button></section>
       <section id="delete-section" class="settings-section" hidden><h3>Your data</h3><button id="delete-cycle" class="text-button danger">Delete cycle and disconnect all devices</button></section>
     </div>
-    <section class="settings-section about"><h3>Simple, by design.</h3><p class="dialog-copy">Four colors. One shared status. Phases change only when you select them. Menstruation is shown separately for simplicity; it is part of the follicular phase.</p><p class="small-note">For shared awareness, not contraception or medical decisions. Everyone experiences their cycle differently.</p><p class="small-note">On iPhone, add to Home Screen before enabling notifications. Notifications use discreet text without the phase name.</p><p class="small-note">Version 1.0.0</p></section>
+    <section class="settings-section about"><h3>Simple, by design.</h3><p class="dialog-copy">Four colors. One shared status. Choose phases yourself, or use an optional schedule based on your own durations. Menstruation is shown separately for simplicity; it is part of the follicular phase.</p><p class="small-note">For shared awareness, not contraception or medical decisions. Everyone experiences their cycle differently.</p><p class="small-note">On iPhone, add to Home Screen before enabling notifications. Notifications use discreet text without the phase name.</p><p class="small-note">Version 1.1.0</p></section>
   </dialog>
   <div id="toast" role="status" aria-live="polite" hidden></div>
   <noscript><p class="noscript">Enable JavaScript to use Know Her Cycle.</p></noscript>

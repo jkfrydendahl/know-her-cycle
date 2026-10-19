@@ -32,12 +32,13 @@ export function pushReady(env = process.env) {
   return Boolean(vapidConfiguration(env).details);
 }
 export function createNotifier(env = process.env, send = webpush.sendNotification.bind(webpush), log = console.warn) {
-  return async ({ version, subscriptions }) => {
+  return async ({ version, subscriptions, type = 'change' }) => {
     if (!subscriptions.length) return { sent: 0, failed: 0 };
     const configuration = vapidConfiguration(env);
     if (!configuration.details) return { sent: 0, failed: subscriptions.length, reason: configuration.error || 'Push notifications are not configured on the server.' };
     // Generic lock-screen text deliberately contains no phase or cycle identifier.
-    const payload = JSON.stringify({ title: 'Cycle updated', body: 'Open the app to see the latest phase.',
+    const payload = JSON.stringify({ type, title: type === 'reminder' ? 'Cycle reminder' : 'Cycle updated',
+      body: type === 'reminder' ? 'Your next phase is scheduled for tomorrow. Open the app to review it.' : 'Open the app to see the latest phase.',
       url: '/', tag: `cycle-update-${version}` });
     const results = await Promise.all(subscriptions.map(async (subscription) => {
       try {
@@ -55,7 +56,7 @@ export function createNotifier(env = process.env, send = webpush.sendNotificatio
         } catch { /* Never expose raw provider bodies, headers or endpoints. */ }
         const reason = [401, 403].includes(status)
           ? `Push authentication rejected (${status}${providerReason ? ` ${providerReason}` : ''}). Check the VAPID contact and matching key pair.`
-          : [404, 410].includes(status) ? 'A notification subscription expired. Turn notifications off and on again on the partner device.'
+          : [404, 410].includes(status) ? 'A notification subscription expired. Turn notifications off and on again on the affected device.'
           : status === 429 ? 'The push service is temporarily rate limiting notifications. Try again later.'
           : status ? `The push service rejected a notification (HTTP ${status}).`
           : 'The notification could not reach the push service. Try again and check the Vercel function logs.';
