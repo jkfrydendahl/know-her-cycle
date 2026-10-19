@@ -9,7 +9,7 @@
 @media(max-width:600px){
   /* Keep status near the header; give the phase illustration and actions room.
      A minimum height lets short screens and larger text scroll naturally. */
-  .shell{padding:0 22px;min-height:100vh;min-height:100svh;display:flex;flex-direction:column}
+  .shell{padding:calc(env(safe-area-inset-top,0px) + 8px) 22px 0;min-height:100vh;min-height:100svh;display:flex;flex-direction:column}
   .shell>main{flex:1;display:flex;flex-direction:column;justify-content:flex-start}
   .shell>main>.welcome,.shell>main>.tracker{width:100%}
   .shell>main>.welcome{margin-block:auto}
@@ -33,6 +33,13 @@
   .main-actions{max-width:100%;padding-top:24px}.minor-actions{gap:12px}
   footer{font-size:12px;padding:18px 0 max(16px,env(safe-area-inset-bottom))}
 }
+/* Reclaim a little space on shorter phones without reducing type or controls. */
+@media(max-width:600px) and (max-height:860px){
+  .cycle-art{width:clamp(144px,20svh,184px);height:auto;aspect-ratio:1;margin-top:18px;margin-bottom:14px}
+  .since-label{margin-top:10px}
+  .main-actions{padding-top:14px}
+  footer{padding-top:10px}
+}
 @media(max-width:600px) and (max-height:740px){
   .header{height:64px}
   .welcome{padding-top:16px}
@@ -42,16 +49,16 @@
   .tracker{padding-top:8px}
   .tracker-top{margin-bottom:10px}
   .phase-name{font-size:42px}
-  .cycle-art{width:clamp(112px,21svh,154px);height:auto;aspect-ratio:1;margin:24px auto 20px}
+  .cycle-art{width:clamp(112px,21svh,154px);height:auto;aspect-ratio:1;margin:16px auto 12px}
   .phase-number{bottom:14%}
   .phase-item{padding:7px 0}
-  .since-label{margin:16px 0 0}
+  .since-label{margin:12px 0 0}
   footer{display:flex;align-items:center;justify-content:center;gap:8px;padding-top:12px;padding-bottom:max(12px,env(safe-area-inset-bottom))}
   .footer-flower{width:16px;height:16px;margin:0}
 }
 @media(max-width:600px) and (max-height:600px){
-  .cycle-art{margin-top:16px;margin-bottom:14px}
+  .cycle-art{margin-top:12px;margin-bottom:10px}
   .since-label{margin-top:12px}
-  .main-actions{padding-top:18px}
+  .main-actions{padding-top:14px}
 }
 @media(prefers-reduced-motion:reduce){*{transition:none!important;animation:none!important}}
