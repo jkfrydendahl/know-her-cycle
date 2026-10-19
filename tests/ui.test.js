@@ -3,13 +3,15 @@ import assert from 'node:assert/strict';
 import { readFile } from 'node:fs/promises';
 import vm from 'node:vm';
 import { JSDOM } from 'jsdom';
+import webpush from 'web-push';
 import { createHandler } from '../server/http.js';
 import { memoryStore } from '../server/memory-store.js';
 import { PHASES, phaseById } from '../public/phases.js';
 
 const html = await readFile(new URL('../public/index.html', import.meta.url), 'utf8');
 const source = (await readFile(new URL('../public/app.js', import.meta.url), 'utf8')).replace(/^import .*;\n/, '');
-const env = { APP_ORIGIN: 'https://cycle.example', VAPID_PUBLIC_KEY: 'public-key', VAPID_PRIVATE_KEY: 'private-key', VAPID_CONTACT: 'mailto:example@example.com' };
+const vapid = webpush.generateVAPIDKeys();
+const env = { APP_ORIGIN: 'https://cycle.example', VAPID_PUBLIC_KEY: vapid.publicKey, VAPID_PRIVATE_KEY: vapid.privateKey, VAPID_CONTACT: 'mailto:example@example.com' };
 const keyBytes = Buffer.concat([Buffer.from([4]), Buffer.alloc(64, 7)]).toString('base64url');
 const sub = { endpoint: 'https://fcm.googleapis.com/fcm/send/ui-phone', keys: { p256dh: keyBytes, auth: Buffer.alloc(16, 8).toString('base64url') } };
 
@@ -17,23 +19,27 @@ async function until(predicate) {
   for (let i = 0; i < 150; i++) { if (predicate()) return; await new Promise((resolve) => setTimeout(resolve, 3)); }
   throw new Error('UI did not reach the expected state.');
 }
-async function device(handler, fragment = '', saved = null) {
+async function device(handler, fragment = '', saved = null, { reducedMotion = false, oldApplicationServerKey = null } = {}) {
   const dom = new JSDOM(html, { url: `${env.APP_ORIGIN}/${fragment}`, runScripts: 'outside-only', pretendToBeVisual: true });
   const w = dom.window;
   if (saved) w.localStorage.setItem('khc-access-v1', JSON.stringify(saved));
   let subscription = null;
+  if (oldApplicationServerKey) subscription = { ...sub, options: { applicationServerKey: oldApplicationServerKey },
+    toJSON: () => sub, unsubscribe: async () => { subscription = null; return true; } };
   const registration = { pushManager: {
     getSubscription: async () => subscription,
-    subscribe: async () => {
-      subscription = { ...sub, toJSON: () => sub, unsubscribe: async () => { subscription = null; return true; } };
+    subscribe: async (options) => {
+      subscription = { ...sub, options: { applicationServerKey: options.applicationServerKey }, toJSON: () => sub, unsubscribe: async (options) => { subscription = null; return true; } };
       return subscription;
     }
   } };
   Object.defineProperty(w.navigator, 'serviceWorker', { value: { register: async () => registration, ready: Promise.resolve(registration), addEventListener() {} } });
   Object.defineProperty(w.navigator, 'clipboard', { value: { writeText: async () => {} } });
   w.PushManager = class {};
-  w.Notification = { permission: 'default', requestPermission: async () => { w.Notification.permission = 'granted'; return 'granted'; } };
-  w.matchMedia = () => ({ matches: false }); w.confirm = () => true;
+  w.Notification = { permission: oldApplicationServerKey ? 'granted' : 'default', requestPermission: async () => { w.Notification.permission = 'granted'; return 'granted'; } };
+  w.matchMedia = (query) => ({ matches: reducedMotion && query === '(prefers-reduced-motion: reduce)' }); w.confirm = () => true;
+  const animations = [];
+  w.Element.prototype.animate = function (frames, options) { animations.push({ target: this, frames, options }); return { cancel() {} }; };
   w.HTMLDialogElement.prototype.showModal = function () { this.setAttribute('open', ''); };
   w.HTMLDialogElement.prototype.close = function () { this.removeAttribute('open'); };
   w.AbortSignal = globalThis.AbortSignal;
@@ -53,7 +59,7 @@ async function device(handler, fragment = '', saved = null) {
   const byId = (id) => w.document.getElementById(id);
   try { await until(() => !byId('start-owner').disabled || !byId('tracker').hidden); }
   catch (error) { dom.window.close(); throw error; }
-  return { dom, w, $: byId, online(value) { online = value; } };
+  return { dom, w, $: byId, animations, online(value) { online = value; } };
 }
 
 test('two-device UI: setup, invitation, partner push, phase update, correction, undo, offline, recovery and revocation', async (t) => {
@@ -65,6 +71,7 @@ test('two-device UI: setup, invitation, partner push, phase update, correction, 
   owner.$('phase-options').querySelector('[data-phase="menstrual"]').click();
   await until(() => !owner.$('tracker').hidden && !owner.$('next-phase').disabled);
   assert.equal(owner.$('phase-name').textContent, 'Menstrual 😭');
+  assert.equal(owner.animations.length, 0);
   assert.equal(owner.$('viewer-actions').hidden, true);
   owner.$('settings-open').click(); owner.$('invite').click();
   await until(() => !owner.$('invite-result').hidden);
@@ -80,6 +87,8 @@ test('two-device UI: setup, invitation, partner push, phase update, correction, 
   await until(() => viewer.$('enable-push').textContent.includes('enabled'));
   owner.$('settings-dialog').close(); owner.$('next-phase').click();
   await until(() => owner.$('phase-name').textContent === 'Follicular 🤗' && !owner.$('next-phase').disabled);
+  assert.equal(owner.animations.length, 1);
+  assert.equal(owner.animations[0].target.className, 'cycle-art');
   assert.equal(deliveries.length, 1); assert.equal(deliveries[0].subscriptions.length, 1);
   viewer.$('refresh').click();
   await until(() => viewer.$('phase-name').textContent === 'Follicular 🤗' && !viewer.$('refresh').disabled);
@@ -96,11 +105,38 @@ test('two-device UI: setup, invitation, partner push, phase update, correction, 
   const accessKey = JSON.parse(owner.w.localStorage.getItem('khc-access-v1'));
   const recovered = await device(handler, '', accessKey); t.after(() => recovered.dom.window.close());
   await until(() => recovered.$('phase-name').textContent === 'Follicular 🤗');
+  assert.equal(recovered.animations.length, 0);
+  const reduced = await device(handler, '', accessKey, { reducedMotion: true }); t.after(() => reduced.dom.window.close());
+  owner.$('next-phase').click();
+  await until(() => owner.$('phase-name').textContent === 'Ovulating 😽' && !owner.$('next-phase').disabled);
+  reduced.$('refresh').click();
+  await until(() => reduced.$('phase-name').textContent === 'Ovulating 😽' && !reduced.$('refresh').disabled);
+  assert.equal(reduced.animations.length, 0);
   owner.$('settings-open').click(); owner.$('disconnect').click();
   await until(() => owner.$('sharing-label').textContent.startsWith('Only you'));
   viewer.$('refresh').click();
   await until(() => !viewer.$('welcome').hidden);
   assert.equal(viewer.w.localStorage.getItem('khc-access-v1'), null);
+});
+
+test('restored partner clears a subscription tied to an old VAPID key and can enable a fresh one', async (t) => {
+  const handler = createHandler({ store: memoryStore(), env, notify: async () => ({ sent: 1, failed: 0 }) });
+  async function api(action, body, token) {
+    const res = { setHeader() {}, status(code) { this.code = code; return this; }, json(value) { this.value = value; } };
+    await handler({ method: 'POST', query: { action }, body, headers: { origin: env.APP_ORIGIN,
+      'content-type': 'application/json', ...(token ? { authorization: `Bearer ${token}` } : {}) } }, res);
+    assert.ok(res.code < 400); return res.value;
+  }
+  const owner = await api('create', { phase: 'menstrual' });
+  const invitation = await api('invite', {}, owner.token);
+  const viewer = await api('join', { invitation: invitation.invitation });
+  await api('subscribe', { subscription: sub }, viewer.token);
+  const restored = await device(handler, '', viewer.token, { oldApplicationServerKey: new Uint8Array(65).buffer });
+  t.after(() => restored.dom.window.close());
+  await until(() => restored.$('toast').textContent.includes('Notification keys changed'));
+  assert.equal(restored.$('enable-push').disabled, false);
+  restored.$('enable-push').click();
+  await until(() => restored.$('enable-push').textContent.includes('enabled'));
 });
 
 test('all HTML IDs are unique and all application element references exist', () => {

@@ -82,7 +82,7 @@ export function createService({ store, notify = async () => ({ sent: 0, failed: 
           if (await store.compare(id, snapshot.raw, clean)) break;
         }
       }
-      return { sent: result.sent, failed: result.failed };
+      return { sent: result.sent, failed: result.failed, ...(result.reason ? { reason: result.reason } : {}) };
     } catch { return { sent: 0, failed: 1 }; }
   }
   return {
