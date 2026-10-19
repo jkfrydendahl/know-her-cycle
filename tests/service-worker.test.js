@@ -29,8 +29,8 @@ test('push displays discreet fixed text and refreshes open clients, ignoring pay
   w.handlers.push({ data: { json: () => ({ body: 'Ovulation details', url: 'https://evil.example' }) }, waitUntil(promise) { task = promise; } });
   await task;
   assert.equal(w.notifications.length, 1);
-  assert.equal(w.notifications[0][0], 'Know Her Cycle');
-  assert.equal(w.notifications[0][1].body, 'Cycle status updated. Open the app to see what’s new.');
+  assert.equal(w.notifications[0][0], 'Cycle updated');
+  assert.equal(w.notifications[0][1].body, 'Open the app to see the latest phase.');
   assert.equal(w.notifications[0][1].data.url, '/');
   assert.equal(w.messages[0].type, 'phase-updated');
 });

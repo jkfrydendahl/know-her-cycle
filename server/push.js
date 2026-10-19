@@ -37,7 +37,7 @@ export function createNotifier(env = process.env, send = webpush.sendNotificatio
     const configuration = vapidConfiguration(env);
     if (!configuration.details) return { sent: 0, failed: subscriptions.length, reason: configuration.error || 'Push notifications are not configured on the server.' };
     // Generic lock-screen text deliberately contains no phase or cycle identifier.
-    const payload = JSON.stringify({ title: 'Know Her Cycle', body: 'Cycle status updated. Open the app to see what’s new.',
+    const payload = JSON.stringify({ title: 'Cycle updated', body: 'Open the app to see the latest phase.',
       url: '/', tag: `cycle-update-${version}` });
     const results = await Promise.all(subscriptions.map(async (subscription) => {
       try {
