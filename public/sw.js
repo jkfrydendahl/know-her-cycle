@@ -1,4 +1,4 @@
-const CACHE = 'khc-shell-v1.0.0-push-feedback';
+const CACHE = 'khc-shell-v1.0.0-notification-copy-spacing';
 const SHELL = ['/', '/index.html', '/styles.css', '/app.js', '/phases.js', '/icon.svg', '/icon-192.png', '/icon-512.png', '/apple-touch-icon.png', '/manifest.webmanifest'];
 self.addEventListener('install', (event) => { event.waitUntil(caches.open(CACHE).then((cache) => cache.addAll(SHELL))); });
 self.addEventListener('activate', (event) => {
@@ -17,8 +17,8 @@ self.addEventListener('push', (event) => {
   let payload = {};
   try { payload = event.data?.json() || {}; } catch { /* Generic fallback. */ }
   event.waitUntil(Promise.all([
-    self.registration.showNotification('Know Her Cycle', {
-      body: 'Cycle status updated. Open the app to see what’s new.',
+    self.registration.showNotification('Cycle updated', {
+      body: 'Open the app to see the latest phase.',
       icon: '/icon-192.png', badge: '/icon-192.png', tag: 'khc-phase-change', data: { url: '/' }
     }),
     self.clients.matchAll({ type: 'window', includeUncontrolled: true }).then((clients) => clients.forEach((client) => client.postMessage({ type: 'phase-updated' })))
