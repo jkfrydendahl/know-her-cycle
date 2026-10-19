@@ -54,6 +54,24 @@ async function run(work) {
 function formatDate(value) {
   return new Intl.DateTimeFormat(undefined, { month: 'short', day: 'numeric' }).format(new Date(value));
 }
+function icon(name) {
+  const namespace = 'http://www.w3.org/2000/svg';
+  const svg = document.createElementNS(namespace, 'svg');
+  svg.setAttribute('class', 'ui-icon');
+  svg.setAttribute('viewBox', '0 0 24 24');
+  svg.setAttribute('aria-hidden', 'true');
+  svg.setAttribute('focusable', 'false');
+  const path = document.createElementNS(namespace, 'path');
+  path.setAttribute('d', name === 'check' ? 'm5 12 4 4L19 6' : 'M6 18 18 6M6 6h12v12');
+  svg.append(path);
+  return svg;
+}
+function buttonContent(button, text, symbol) {
+  const label = document.createElement('span');
+  label.className = 'button-label';
+  label.textContent = text;
+  button.replaceChildren(label, icon(symbol));
+}
 function render() {
   $('welcome').hidden = Boolean(state); $('tracker').hidden = !state;
   $('session-settings').hidden = !state;
@@ -74,7 +92,7 @@ function render() {
     if (i === index) item.setAttribute('aria-current', 'step'); else item.removeAttribute('aria-current');
   });
   $('owner-actions').hidden = !owner; $('viewer-actions').hidden = owner;
-  $('next-phase').textContent = `Start ${phase.next.toLowerCase()} phase  ↗`;
+  buttonContent($('next-phase'), `Start ${phase.next.toLowerCase()} phase`, 'arrow');
   $('next-phase').disabled = busy || stale; $('correct-phase').disabled = busy || stale;
   $('undo').disabled = busy || stale || !state.canUndo;
   $('role-label').textContent = owner ? 'Your cycle, your choice' : 'Shared with you';
@@ -88,7 +106,7 @@ function render() {
   $('delete-cycle').disabled = busy || stale;
   $('notification-settings').hidden = owner;
   const enabled = Boolean(currentSubscription) && globalThis.Notification?.permission === 'granted';
-  $('enable-push').textContent = enabled ? 'Notifications enabled ✓' : 'Notify me of changes  ↗';
+  buttonContent($('enable-push'), enabled ? 'Notifications enabled' : 'Notify me of changes', enabled ? 'check' : 'arrow');
   $('enable-push').disabled = busy || stale || enabled || !config?.vapidPublicKey;
   $('disable-push').disabled = busy || stale || !currentSubscription;
   $('notification-status').textContent = enabled ? 'Notifications are enabled on this device.' : 'Notifications are off on this device.';
@@ -166,7 +184,7 @@ function wire() {
   PHASES.forEach((phase) => {
     const item = document.createElement('span'); item.className = 'phase-item'; item.textContent = phase.short; $('phase-strip').append(item);
     const option = document.createElement('button'); option.type = 'button'; option.className = 'phase-option'; option.dataset.phase = phase.id;
-    const label = document.createElement('span'); label.textContent = phase.name; option.append(label, document.createTextNode('↗'));
+    const label = document.createElement('span'); label.textContent = phase.name; option.append(label, icon('arrow'));
     option.addEventListener('click', () => run(async () => {
       if (phaseMode === 'create') { remember(await request('create', { phase: phase.id }, null)); close('phase-dialog'); }
       else if (state.phase === phase.id) close('phase-dialog');
