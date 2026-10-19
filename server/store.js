@@ -3,9 +3,16 @@ import { Redis } from '@upstash/redis';
 export const CAS_SCRIPT = `
 if redis.call('GET', KEYS[1]) ~= ARGV[1] then return 0 end
 redis.call('SET', KEYS[1], ARGV[2])
+local value = cjson.decode(ARGV[2])
+if value.automation and value.automation.enabled then
+  redis.call('SADD', KEYS[2], ARGV[3])
+else
+  redis.call('SREM', KEYS[2], ARGV[3])
+end
 return 1`;
 export const REMOVE_SCRIPT = `
 if redis.call('GET', KEYS[1]) ~= ARGV[1] then return 0 end
+redis.call('SREM', KEYS[2], ARGV[2])
 return redis.call('DEL', KEYS[1])`;
 export const LIMIT_SCRIPT = `
 local count = redis.call('INCR', KEYS[1])
@@ -23,10 +30,18 @@ export function createStore(redis) {
       if (!await redis.set(key(id), JSON.stringify(value), { nx: true })) throw new Error('Cycle ID collision');
     },
     async compare(id, expected, value) {
-      return Number(await redis.eval(CAS_SCRIPT, [key(id)], [expected, JSON.stringify(value)])) === 1;
+      return Number(await redis.eval(CAS_SCRIPT, [key(id), 'khc:scheduled'], [expected, JSON.stringify(value), id])) === 1;
     },
     async remove(id, expected) {
-      return Number(await redis.eval(REMOVE_SCRIPT, [key(id)], [expected])) === 1;
+      return Number(await redis.eval(REMOVE_SCRIPT, [key(id), 'khc:scheduled'], [expected, id])) === 1;
+    },
+    async *scheduled() {
+      let cursor = 0;
+      do {
+        const result = await redis.sscan('khc:scheduled', cursor, { count: 100 });
+        cursor = Number(result[0]);
+        for (const id of result[1]) if (/^[a-f0-9]{32}$/.test(id)) yield id;
+      } while (cursor !== 0);
     },
     async limit(digest, max, seconds) {
       const count = Number(await redis.eval(LIMIT_SCRIPT, [`khc:limit:${digest}`], [seconds]));

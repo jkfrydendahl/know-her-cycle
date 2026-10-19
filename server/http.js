@@ -1,8 +1,9 @@
 import { AppError, createService, hash } from './domain.js';
 import { pushReady, createNotifier, vapidConfiguration } from './push.js';
 import { productionStore } from './store.js';
+import { checkCronAuthorization, runDailyCheck } from './cron.js';
 
-const MUTATIONS = new Set(['create', 'invite', 'join', 'phase', 'disconnect', 'subscribe', 'unsubscribe', 'delete']);
+const MUTATIONS = new Set(['create', 'invite', 'join', 'phase', 'automation', 'disconnect', 'subscribe', 'unsubscribe', 'delete']);
 export function createHandler({ store, notify, env = process.env, now } = {}) {
   let backingStore = store;
   return async function handler(req, res) {
@@ -11,7 +12,7 @@ export function createHandler({ store, notify, env = process.env, now } = {}) {
     res.setHeader('Vary', 'Origin');
     try {
       const action = req.query?.action;
-      if (!['config', 'state', ...MUTATIONS].includes(action)) throw new AppError(404, 'Not found.');
+      if (!['config', 'state', 'cron', ...MUTATIONS].includes(action)) throw new AppError(404, 'Not found.');
       const method = MUTATIONS.has(action) ? 'POST' : 'GET';
       if (req.method !== method) { res.setHeader('Allow', method); throw new AppError(405, 'Method not allowed.'); }
       if (!env.APP_ORIGIN || new URL(env.APP_ORIGIN).origin !== env.APP_ORIGIN) throw new AppError(503, 'Set APP_ORIGIN in the server configuration.');
@@ -32,6 +33,10 @@ export function createHandler({ store, notify, env = process.env, now } = {}) {
         if (Buffer.byteLength(JSON.stringify(req.body)) > 12_288) throw new AppError(413, 'Request too large.');
       }
       backingStore ||= productionStore(env);
+      if (action === 'cron') {
+        if (!checkCronAuthorization(req.headers.authorization, env.CRON_SECRET)) throw new AppError(401, 'Unauthorized scheduled request.');
+        return res.status(200).json(await runDailyCheck({ store: backingStore, notify: notify || createNotifier(env), now }));
+      }
       // Vercel sets x-real-ip. Never retain or log raw client addresses.
       const address = req.headers['x-real-ip'] || req.socket?.remoteAddress || 'unknown';
       if (['create', 'join'].includes(action)
@@ -49,6 +54,9 @@ export function createHandler({ store, notify, env = process.env, now } = {}) {
         case 'invite': result = await service.invite(token); break;
         case 'join': result = await service.join(req.body.invitation); break;
         case 'phase': result = await service.phase(token, req.body); break;
+        case 'automation':
+          if (req.body.enabled && (!env.CRON_SECRET || env.CRON_SECRET.length < 24)) throw new AppError(503, 'Set a CRON_SECRET of at least 24 characters in Vercel, then redeploy to enable scheduling.');
+          result = await service.automation(token, req.body); break;
         case 'disconnect': result = await service.disconnect(token); break;
         case 'subscribe':
           if (!pushReady(env)) throw new AppError(503, vapidConfiguration(env).error || 'Notifications have not been configured yet.');

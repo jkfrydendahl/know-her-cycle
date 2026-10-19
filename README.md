@@ -1,6 +1,6 @@
 # Know Her Cycle
 
-A small PWA for sharing a manually selected cycle phase. Four colors, one main button, and optional partner notifications.
+A small PWA for sharing a selected cycle phase, with optional scheduled changes. Four colors, one main button, and optional partner notifications.
 
 ## Everyday use
 
@@ -9,9 +9,21 @@ A small PWA for sharing a manually selected cycle phase. Four colors, one main b
 3. Your partner opens the link, taps **Connect with my partner**, and optionally enables notifications.
 4. Tap **Start next phase** whenever you want to change the shared status. Use **Change phase** to correct or skip a stage, or **Undo last change** to restore the previous phase and its selection date.
 
-The partner view refreshes when opened, brought to the foreground, manually refreshed, or every minute while visible. A push message also refreshes an open view. Status never advances automatically.
+The partner view refreshes when opened, brought to the foreground, manually refreshed, or every minute while visible. A push message also refreshes an open view. Automatic switching is off by default; enable it in Settings if you want scheduled changes.
 
-The four interface stages are menstrual, follicular, ovulatory, and luteal. Menstruation is biologically part of the follicular phase; it is displayed separately for simplicity. These are manually selected labels, not detected or predicted biological states. The app is for shared awareness, not contraception or medical decisions. It makes no claims about mood, energy, or fertility. See [NHS: the menstrual cycle](https://www.nhs.uk/conditions/periods/fertility-in-the-menstrual-cycle/).
+The four interface stages are menstrual, follicular, ovulatory, and luteal. Menstruation is biologically part of the follicular phase; it is displayed separately for simplicity. These are selected labels or calendar-based estimates, not detected biological states. The app is for shared awareness, not contraception or medical decisions. It makes no claims about mood, energy, or fertility. See [NHS: the menstrual cycle](https://www.nhs.uk/conditions/periods/fertility-in-the-menstrual-cycle/).
+
+## Optional automatic switching
+
+In **Settings → Automatic phases**, enter the number of days in each phase (1–90), when the current phase started, and your IANA time zone (for example, `Europe/Copenhagen`). Enable switching and save. There are no preset phase durations. Calendar days are counted in the chosen time zone: five days starting October 19 means the next phase is scheduled for October 24.
+
+- The server checks schedules once daily, even when both apps are closed. Automatically selected phases show **Estimated from**; the next scheduled date is shown beside the selection date.
+- A manual phase change becomes the new starting point **today**, preserving the four saved durations. In automatic mode, Undo also starts the restored phase from today. In manual mode, Undo retains its original behavior of restoring the earlier date.
+- **Remind me the day before a change** enables owner reminders. Save first, then tap **Enable reminders on this device**. Owner reminders and partner change notifications have separate subscriptions; up to five devices per role can subscribe.
+- Unchecking automatic switching and saving pauses it, retaining durations for later. Re-enabling uses the date you enter and catches up immediately if that phase would already have ended.
+- A missed daily run catches up to the current estimated phase on the next run, sending one current-status notification rather than a backlog. Expired reminders are skipped. Attempts are claimed before sending, so overlapping jobs do not duplicate reminders. Failed notifications are best effort and are not retried automatically.
+
+Existing cycles remain manual until their owner enables switching. No data migration is required.
 
 ## Deploy to Vercel
 
@@ -31,8 +43,11 @@ Use a **separate Vercel project and separate Upstash database** from your existi
 | `VAPID_PUBLIC_KEY` | Generated public VAPID key |
 | `VAPID_PRIVATE_KEY` | Generated private VAPID key, server only |
 | `VAPID_CONTACT` | Valid contact, e.g. `mailto:you@example.com` |
+| `CRON_SECRET` | Random secret of at least 24 characters, server only; required for automatic switching |
 
-The public VAPID key is returned by `/api/config`, so no frontend edits are needed. You can use pairing and status updates without VAPID configured; the app will explain why notifications are unavailable. There are **no cron jobs**: a successful phase change sends notifications immediately from the backend.
+The public VAPID key is returned by `/api/config`, so no frontend edits are needed. You can use pairing and status updates without VAPID configured; the app will explain why notifications are unavailable. Manual phase changes send notifications immediately from the backend.
+
+For scheduling, add `CRON_SECRET` to the production environment and redeploy. Generate a value locally with `node -e "console.log(require('node:crypto').randomBytes(32).toString('hex'))"`; keep it private. The daily `/api/cron` job in `vercel.json` runs at **07:00 UTC**. On Vercel Hobby it can run within the following hour: roughly 08:00–10:00 in Denmark depending on daylight saving. It does not switch at midnight or promise an exact delivery time. Vercel adds `Authorization: Bearer <CRON_SECRET>` to scheduled requests. Cron jobs run on production deployments; scheduling cannot be fully tested on a preview deployment. A 60-second function limit is configured for these small daily batches. For larger installations, use a queue with resumable processing before relying on this as a large-scale scheduler.
 
 Preview deployments require their own exact `APP_ORIGIN`. Give them a separate development database and VAPID keys rather than using production cycle records. Do not use this development server as public hosting.
 
@@ -40,7 +55,7 @@ Preview deployments require their own exact `APP_ORIGIN`. Give them a separate d
 
 Install using **Add to Home Screen** on iPhone/iPad, then open the installed app before pairing or restoring access and enabling notifications. Web Push requires iOS/iPadOS 16.4 or later. On supported Android and desktop browsers, notifications are also opt-in. Each browser/install keeps its own credentials. If you set up in Safari before installing, use the saved access key in **Restore access** if the installed app does not share that session.
 
-Notifications use the title “Cycle updated” and the body “Open the app to see the latest phase.”, without a phase name. Tapping one opens the current shared status. Delivery depends on the browser's push service, connectivity and device settings; it is not guaranteed. The API reports delivery failures without rolling back the saved status. It does not automatically retry transient push failures. Expired push endpoints are removed after 404/410 responses. Up to five partner devices can subscribe; switching off one device preserves the others.
+Notifications use the title “Cycle updated” and the body “Open the app to see the latest phase.”, without a phase name. Owner reminders use “Cycle reminder” / “Your next phase is scheduled for tomorrow. Open the app to review it.” Tapping either opens the current shared status. Delivery depends on the browser's push service, connectivity and device settings; it is not guaranteed. The API reports delivery failures without rolling back the saved status. It does not automatically retry transient push failures. Expired push endpoints are removed after 404/410 responses. Up to five devices per role can subscribe; switching off one device preserves the others.
 
 ### If a notification cannot be delivered
 
@@ -60,6 +75,8 @@ The phase is saved even when push delivery fails. The app now shows a safe diagn
 - Enable notifications on the partner phone, close the app, and change the phase on the tracking phone. Check the notification and its tap behavior.
 - Verify correction and undo, refresh on the partner phone, and recovery using the access key.
 - Disconnect the partner and confirm their next refresh removes access. Check that subsequent changes no longer target their subscriptions.
+- Enable automatic phases with a current start date and verify the next date. Save a manual correction and confirm it restarts the schedule from today. Enable owner reminders on the installed tracking app.
+- In production, check the scheduled job in Vercel and verify a day-before reminder and the following phase change on both phones. Check that repeated runs do not resend the reminder. Keep the cron secret out of screenshots and logs.
 - With the app previously opened, go offline and check that cached status is marked as stale and edits are disabled.
 
 ## Access, storage and privacy
@@ -68,9 +85,9 @@ The phase is saved even when push delivery fails. The app now shows a safe diagn
 - Each credential has a random cycle identifier and a 256-bit secret. Redis stores SHA-256 hashes of access and invitation credentials; the browser stores its own raw access credential locally. An access key grants its role's permissions. Keep it private.
 - The tracking person controls status, invitations, disconnection and deletion. The partner can view, manage notifications on their devices, or leave. The backend enforces permissions, not just the interface.
 - Invitations travel in URL fragments, so their secrets are not sent in HTTP request URLs or Referer headers. The app removes the fragment before further interaction. Invite redemption exchanges the invitation for a separate viewer credential.
-- Each cycle is isolated in `khc:cycle:<random-id>`. It stores the current phase/date, one previous phase/date for undo, credential hashes, one pending invitation, and partner push subscriptions. No cycle-history timeline is retained. Records remain until the owner deletes them; rate-limit counters expire automatically.
+- Each cycle is isolated in `khc:cycle:<random-id>`. It stores the current phase/date, one previous phase/date for undo, credential hashes, one pending invitation, partner and owner push subscriptions, and optional schedule settings (durations, time zone, phase start date, last reminder claim). No cycle-history timeline is retained. Records remain until the owner deletes them; rate-limit counters expire automatically. The `khc:scheduled` Redis set contains only cycle IDs with automatic switching enabled; saving or deleting a record updates this index atomically. The `khc:limit:*` keys remain temporary request-rate counters.
 - Atomic Redis compare-and-swap operations prevent invitation reuse, stale writes and subscription changes overwriting each other. Phase versions prevent a double tap or an old device overwriting a newer update.
-- Subscriptions are private to the linked viewer and that cycle. Disconnecting clears their credential, all subscriptions and any pending invite. A push already handed to a push service cannot be recalled.
+- Subscriptions are private to their role and cycle. Disconnecting clears the viewer credential, viewer subscriptions and any pending invite; owner reminder subscriptions remain. A push already handed to a push service cannot be recalled.
 - Same-origin APIs, validation, request limits, method checks, content security policy, and push-host restrictions are included. Raw IP addresses are not stored by app code; temporary rate-limit keys use hashes. Hosting/provider infrastructure may have its own logs and backups.
 - The offline cache stores only the app shell. The browser separately retains the last synced state, visibly marked stale when sync fails. API responses use `no-store`, are never service-worker cached, and offline edits are disabled.
 
@@ -78,7 +95,7 @@ The phase is saved even when push delivery fails. The app now shows a safe diagn
 
 **Save the private access key from settings** in a password manager or another private place. Paste it into **Restore access** on a new install/device. Anyone with the owner key can control the cycle. Viewer devices restored using the same viewer key share membership; when one leaves, all those viewer devices lose access.
 
-**Forget this device** removes its local credential and last synced status; for a connected partner, it also removes that device's push subscription. It does not delete the cycle or revoke copies of its access key. **Delete cycle** removes the live Redis record and all active credentials/subscriptions. It cannot erase copies of data already viewed or a provider's backups. If the owner loses every key and logged-in device, there is no email recovery or admin backdoor: create a new cycle.
+**Forget this device** removes its local credential and last synced status; it also removes that device's push subscription for either role. It does not delete the cycle or revoke copies of its access key. **Delete cycle** removes the live Redis record and all active credentials/subscriptions. It cannot erase copies of data already viewed or a provider's backups. If the owner loses every key and logged-in device, there is no email recovery or admin backdoor: create a new cycle.
 
 ## Development and checks
 
@@ -91,7 +108,7 @@ npm run dev
 
 Open `http://localhost:3000`. Without Redis environment variables the development server uses **in-memory storage**, which resets on restart. Production never falls back to this store. To use real environment variables locally, copy `.env.example` to `.env` and use `node --env-file=.env scripts/dev.mjs`. Never commit `.env`.
 
-Tests cover permission boundaries, one-use and concurrent invitations, expiry, cycle isolation, conflicting updates, undo, disconnection, deletion, push failures and cleanup, request validation, and a two-device DOM interaction flow. No live Redis or push service is needed. Real Redis connectivity, Vercel routing and phone push delivery require the deployment smoke check above. DOM interaction checks do not replace a rendered browser/device check.
+Tests cover permission boundaries, one-use and concurrent invitations, expiry, cycle isolation, conflicting updates, undo, disconnection, deletion, push failures and cleanup, request validation, calendar scheduling, time zones/DST, catch-up, reminder deduplication, cron authorization, and DOM interaction flows for two-device sharing and owner scheduling. No live Redis or push service is needed. Real Redis connectivity, Vercel routing and phone push delivery require the deployment smoke check above. DOM interaction checks do not replace a rendered browser/device check.
 
 ## Structure
 
@@ -101,6 +118,8 @@ api/[action].js     Vercel API entry point (/api/create, /api/state, etc.)
 server/domain.js    Permissions, pairing, phase updates and subscriptions
 server/store.js     Upstash storage with atomic compare-and-swap
 server/push.js      Web Push sender
+server/schedule.js  Calendar-day scheduling and validation
+server/cron.js      Authenticated daily processing
 server/http.js      API validation and rate limiting
 scripts/            Local server and static checks
 tests/              Domain, API and DOM integration tests

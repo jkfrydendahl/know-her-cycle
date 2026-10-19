@@ -4,8 +4,8 @@ import { createHandler } from '../server/http.js';
 import { memoryStore } from '../server/memory-store.js';
 
 const env = { APP_ORIGIN: 'https://cycle.example' };
-function fixture() {
-  const handler = createHandler({ store: memoryStore(), env });
+function fixture(overrides = {}) {
+  const handler = createHandler({ store: memoryStore(), env: { ...env, ...overrides } });
   return async (action, { method = 'POST', body = {}, token, origin = env.APP_ORIGIN, headers = {} } = {}) => {
     const response = { headers: {}, setHeader(key, value) { this.headers[key] = value; }, status(code) { this.code = code; return this; }, json(data) { this.data = data; return this; } };
     await handler({ query: { action }, method, body, headers: { origin, 'content-type': 'application/json',
@@ -36,4 +36,17 @@ test('pairing attempts are rate limited and unconfigured push does not accept su
   assert.equal((await call('join', { body: { invitation: 'bad' } })).code, 429);
   const owner = await call('create', { body: { phase: 'menstrual' } });
   assert.equal((await call('subscribe', { token: owner.data.token, body: { subscription: {} } })).code, 503);
+});
+
+test('cron authentication and scheduling configuration are enforced separately from user access', async () => {
+  const secret = 's'.repeat(32), call = fixture({ CRON_SECRET: secret });
+  assert.equal((await call('cron', { method: 'GET' })).code, 401);
+  assert.equal((await call('cron', { method: 'GET', token: 'wrong' })).code, 401);
+  assert.equal((await call('cron', { token: secret })).code, 405);
+  const result = await call('cron', { method: 'GET', token: secret });
+  assert.equal(result.code, 200); assert.equal(result.data.checked, 0);
+  const unconfigured = fixture();
+  const owner = await unconfigured('create', { body: { phase: 'menstrual' } });
+  assert.equal((await unconfigured('automation', { token: owner.data.token, body: { enabled: true } })).code, 503);
+  assert.equal((await unconfigured('automation', { token: owner.data.token, body: { enabled: false, version: 1 } })).code, 200);
 });

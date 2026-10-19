@@ -40,10 +40,10 @@ test('simultaneous invitation redemption has exactly one winner', async () => {
   assert.equal(results.filter((r) => r.status === 'fulfilled').length, 1);
   assert.equal(results.filter((r) => r.status === 'rejected' && r.reason.status === 410).length, 1);
 });
-test('viewer cannot change phase, issue invites, or delete the cycle; owner cannot subscribe', async () => {
+test('viewer cannot change phase, issue invites, or delete the cycle', async () => {
   const f = await fixture(), viewer = await partner(f);
   for (const operation of [() => f.service.phase(viewer.token, { phase: 'follicular', version: 1 }),
-    () => f.service.invite(viewer.token), () => f.service.remove(viewer.token), () => f.service.subscribe(f.owner.token, pushSubscription())]) {
+    () => f.service.invite(viewer.token), () => f.service.remove(viewer.token)]) {
     await assert.rejects(operation(), { status: 403 });
   }
   assert.equal((await f.service.state(f.owner.token)).phase, 'menstrual');

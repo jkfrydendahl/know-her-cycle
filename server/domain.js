@@ -1,5 +1,6 @@
 import { createHash, randomBytes, timingSafeEqual } from 'node:crypto';
 import { PHASES, phaseById } from '../public/phases.js';
+import { addDays, localDate, nextDate, projection, validDate, validDurations, validTimeZone } from './schedule.js';
 
 export class AppError extends Error {
   constructor(status, message) { super(message); this.status = status; }
@@ -21,11 +22,15 @@ function roleOf(record, digest) {
   fail(401, 'This device is no longer linked.');
 }
 const requireOwner = (role) => { if (role !== 'owner') fail(403, 'Only the person tracking can change this.'); };
-const requireViewer = (role) => { if (role !== 'viewer') fail(403, 'Notifications are available in the partner view.'); };
 function publicState(record, role) {
   return { phase: record.phase, since: record.since, updatedAt: record.updatedAt, version: record.version,
     role, linked: Boolean(record.viewer), canUndo: role === 'owner' && Boolean(record.previous),
-    subscribed: role === 'viewer' && Object.keys(record.subscriptions).length > 0 };
+    subscribed: Object.keys(role === 'owner' ? record.ownerSubscriptions || {} : record.subscriptions).length > 0,
+    estimated: record.phaseSource === 'automatic',
+    automation: record.automation ? (role === 'owner'
+      ? { enabled: record.automation.enabled, reminders: record.automation.reminders, days: record.automation.days,
+          timeZone: record.automation.timeZone, startDate: record.automation.startDate, nextDate: nextDate(record) }
+      : { enabled: record.automation.enabled, nextDate: nextDate(record), timeZone: record.automation.timeZone }) : null };
 }
 const ALLOWED_PUSH_HOSTS = [
   'fcm.googleapis.com', 'updates.push.services.mozilla.com', 'push.services.mozilla.com',
@@ -67,18 +72,21 @@ export function createService({ store, notify = async () => ({ sent: 0, failed: 
     const role = roleOf(snapshot.value, digest);
     return publicState(snapshot.value, role);
   }
-  async function delivery(id, changed) {
+  async function delivery(id, changed, reminder = false) {
     try {
       // Recheck membership after saving; never broadcast across cycles.
       const current = (await store.read(id))?.value;
       if (!current || current.version !== changed.version || current.viewer !== changed.viewer) return { sent: 0, failed: 0 };
-      const result = await notify({ id, version: changed.version, subscriptions: Object.values(current.subscriptions) });
+      if (reminder && (!current.automation?.enabled || !current.automation.reminders
+        || current.automation.reminderKey !== changed.automation.reminderKey)) return { sent: 0, failed: 0 };
+      const field = reminder ? 'ownerSubscriptions' : 'subscriptions';
+      const result = await notify({ id, version: changed.version, type: reminder ? 'reminder' : 'change', subscriptions: Object.values(current[field] || {}) });
       if (result.expired?.length) {
         for (let attempt = 0; attempt < 3; attempt++) {
           const snapshot = await store.read(id);
           if (!snapshot || snapshot.value.viewer !== current.viewer) break;
           const clean = structuredClone(snapshot.value);
-          for (const endpoint of result.expired) delete clean.subscriptions[hash(endpoint)];
+          for (const endpoint of result.expired) delete (clean[field] || {})[hash(endpoint)];
           if (await store.compare(id, snapshot.raw, clean)) break;
         }
       }
@@ -87,6 +95,58 @@ export function createService({ store, notify = async () => ({ sent: 0, failed: 
   }
   return {
     state,
+    async automation(token, input) {
+      if (!Number.isSafeInteger(input.version) || typeof input.enabled !== 'boolean') fail(400, 'Refresh before saving the schedule.');
+      if (input.enabled && (typeof input.reminders !== 'boolean' || !validDurations(input.days)
+        || !validTimeZone(input.timeZone) || !validDate(input.startDate))) fail(400, 'Enter a valid start date, time zone and 1–90 days for each phase.');
+      if (input.enabled && input.startDate > localDate(now(), input.timeZone)) fail(400, 'The current phase cannot start in the future.');
+      let phaseChanged = false;
+      const changed = await update(token, (record, role) => {
+        requireOwner(role);
+        if (record.version !== input.version) fail(409, 'The cycle changed. Refresh before saving the schedule.');
+        if (!input.enabled) {
+          if (record.automation) record.automation.enabled = false;
+        } else {
+          const preserveEstimate = record.phaseSource === 'automatic' && record.automation?.startDate === input.startDate;
+          record.automation = { enabled: true, reminders: input.reminders, days: { ...input.days },
+            timeZone: input.timeZone, startDate: input.startDate, reminderKey: record.automation?.reminderKey || null };
+          const projected = projection(record, localDate(now(), input.timeZone));
+          phaseChanged = projected.phase !== record.phase || projected.startDate !== input.startDate;
+          record.phase = projected.phase;
+          record.automation.startDate = projected.startDate;
+          record.since = projected.startDate;
+          record.phaseSource = phaseChanged || preserveEstimate ? 'automatic' : 'manual';
+        }
+        record.previous = null;
+        record.version++; record.updatedAt = now().toISOString();
+      });
+      return { state: publicState(changed.record, changed.role),
+        notification: phaseChanged ? await delivery(changed.id, changed.record) : { sent: 0, failed: 0 } };
+    },
+    async processScheduled(id) {
+      for (let attempt = 0; attempt < 6; attempt++) {
+        const snapshot = await store.read(id);
+        if (!snapshot?.value.automation?.enabled) return { advanced: false, reminded: false, failed: 0 };
+        const record = structuredClone(snapshot.value), schedule = record.automation;
+        const today = localDate(now(), schedule.timeZone), projected = projection(record, today);
+        const advanced = projected.phase !== record.phase || projected.startDate !== schedule.startDate;
+        if (advanced) {
+          record.phase = projected.phase; schedule.startDate = projected.startDate;
+          record.since = projected.startDate; record.phaseSource = 'automatic'; record.previous = null;
+          record.version++; record.updatedAt = now().toISOString();
+        }
+        const due = nextDate(record), reminderKey = `${record.phase}:${schedule.startDate}:${due}`;
+        const reminded = schedule.reminders && due === addDays(today, 1) && schedule.reminderKey !== reminderKey;
+        if (!advanced && !reminded) return { advanced: false, reminded: false, failed: 0 };
+        if (reminded) schedule.reminderKey = reminderKey;
+        if (!await store.compare(id, snapshot.raw, record)) continue;
+        // Claim attempts atomically before sending: retries cannot duplicate them.
+        const sent = await Promise.all([advanced ? delivery(id, record) : { failed: 0 },
+          reminded ? delivery(id, record, true) : { failed: 0 }]);
+        return { advanced, reminded, failed: sent.reduce((sum, item) => sum + item.failed, 0) };
+      }
+      fail(409, 'The cycle kept changing during the daily check.');
+    },
     async create(phase) {
       if (!phaseById(phase)) fail(400, 'Choose a current phase.');
       const id = randomBytes(16).toString('hex'), token = `${id}.${random()}`;
@@ -140,6 +200,11 @@ export function createService({ store, notify = async () => ({ sent: 0, failed: 
           record.since = now().toISOString();
         }
         record.updatedAt = now().toISOString();
+        record.phaseSource = 'manual';
+        if (record.automation?.enabled) {
+          record.automation.startDate = localDate(now(), record.automation.timeZone);
+          record.since = record.automation.startDate;
+        }
         record.version++;
       });
       const notification = await delivery(changed.id, changed.record);
@@ -154,15 +219,16 @@ export function createService({ store, notify = async () => ({ sent: 0, failed: 
     async subscribe(token, subscription) {
       const clean = validateSubscription(subscription), key = hash(clean.endpoint);
       const changed = await update(token, (record, role) => {
-        requireViewer(role);
-        if (!record.subscriptions[key] && Object.keys(record.subscriptions).length >= 5) fail(409, 'Up to five notification devices can be linked.');
-        record.subscriptions[key] = clean;
+        const field = role === 'owner' ? 'ownerSubscriptions' : 'subscriptions';
+        record[field] ||= {};
+        if (!record[field][key] && Object.keys(record[field]).length >= 5) fail(409, 'Up to five notification devices can be linked.');
+        record[field][key] = clean;
       });
       return { state: publicState(changed.record, changed.role) };
     },
     async unsubscribe(token, endpoint) {
       if (typeof endpoint !== 'string' || endpoint.length > 2048) fail(400, 'Invalid subscription.');
-      const changed = await update(token, (record, role) => { requireViewer(role); delete record.subscriptions[hash(endpoint)]; });
+      const changed = await update(token, (record, role) => { delete (role === 'owner' ? record.ownerSubscriptions || {} : record.subscriptions)[hash(endpoint)]; });
       return { state: publicState(changed.record, changed.role) };
     },
     async remove(token) {

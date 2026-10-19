@@ -19,6 +19,7 @@ export function memoryStore() {
       const item = limits.get(key);
       const current = item && item.until > Date.now() ? item : { count: 0, until: Date.now() + seconds * 1000 };
       current.count++; limits.set(key, current); return current.count > max;
-    }
+    },
+    async *scheduled() { for (const [id, raw] of records) if (JSON.parse(raw).automation?.enabled) yield id; }
   };
 }

@@ -11,7 +11,7 @@ import { PHASES, phaseById } from '../public/phases.js';
 const html = await readFile(new URL('../public/index.html', import.meta.url), 'utf8');
 const source = (await readFile(new URL('../public/app.js', import.meta.url), 'utf8')).replace(/^import .*;\n/, '');
 const vapid = webpush.generateVAPIDKeys();
-const env = { APP_ORIGIN: 'https://cycle.example', VAPID_PUBLIC_KEY: vapid.publicKey, VAPID_PRIVATE_KEY: vapid.privateKey, VAPID_CONTACT: 'mailto:example@example.com' };
+const env = { CRON_SECRET: 's'.repeat(32), APP_ORIGIN: 'https://cycle.example', VAPID_PUBLIC_KEY: vapid.publicKey, VAPID_PRIVATE_KEY: vapid.privateKey, VAPID_CONTACT: 'mailto:example@example.com' };
 const keyBytes = Buffer.concat([Buffer.from([4]), Buffer.alloc(64, 7)]).toString('base64url');
 const sub = { endpoint: 'https://fcm.googleapis.com/fcm/send/ui-phone', keys: { p256dh: keyBytes, auth: Buffer.alloc(16, 8).toString('base64url') } };
 
@@ -145,4 +145,29 @@ test('all HTML IDs are unique and all application element references exist', () 
   assert.equal(new Set(ids).size, ids.length);
   for (const [, id] of source.matchAll(/\$\('([^']+)'\)/g)) assert.ok(ids.includes(id), `Missing #${id}`);
   dom.window.close();
+});
+
+
+test('owner can save an optional schedule, enable reminders and pause without losing durations', async (t) => {
+  const handler = createHandler({ store: memoryStore(), env, notify: async () => ({ sent: 1, failed: 0 }) });
+  const owner = await device(handler); t.after(() => owner.dom.window.close());
+  owner.$('start-owner').click(); owner.$('phase-options').querySelector('[data-phase="menstrual"]').click();
+  await until(() => !owner.$('tracker').hidden && !owner.$('next-phase').disabled);
+  owner.$('settings-open').click();
+  assert.equal(owner.$('automation-settings').hidden, false);
+  assert.equal(owner.$('auto-fields').disabled, true);
+  owner.$('auto-enabled').click();
+  for (const [phase, days] of Object.entries({ menstrual: 5, follicular: 8, ovulatory: 3, luteal: 12 })) owner.$(`auto-${phase}`).value = days;
+  owner.$('auto-timezone').value = 'Europe/Copenhagen'; owner.$('auto-reminders').click();
+  owner.$('automation-form').dispatchEvent(new owner.w.Event('submit', { bubbles: true, cancelable: true }));
+  await until(() => owner.$('toast').textContent === 'Schedule saved.' && !owner.$('auto-save').disabled);
+  assert.match(owner.$('since-label').textContent, /Next/);
+  owner.$('owner-enable-push').click();
+  await until(() => owner.$('owner-enable-push').textContent.includes('enabled'));
+  owner.$('auto-enabled').click();
+  owner.$('automation-form').dispatchEvent(new owner.w.Event('submit', { bubbles: true, cancelable: true }));
+  await until(() => owner.$('toast').textContent.includes('paused') && !owner.$('auto-save').disabled);
+  assert.equal(owner.$('auto-menstrual').value, '5');
+  assert.equal(owner.$('owner-enable-push').hidden, true);
+  assert.doesNotMatch(owner.$('since-label').textContent, /Next/);
 });

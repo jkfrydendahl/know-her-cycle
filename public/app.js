@@ -53,7 +53,7 @@ async function run(work) {
   } finally { busy = false; render(); }
 }
 function formatDate(value) {
-  return new Intl.DateTimeFormat(undefined, { month: 'short', day: 'numeric' }).format(new Date(value));
+  return new Intl.DateTimeFormat(undefined, { month: 'short', day: 'numeric' }).format(new Date(/^\d{4}-\d{2}-\d{2}$/.test(value) ? `${value}T12:00:00` : value));
 }
 function icon(name) {
   const namespace = 'http://www.w3.org/2000/svg';
@@ -96,7 +96,7 @@ function render() {
   $('connection').textContent = owner ? (state.linked ? 'Your cycle · partner linked' : 'Your cycle · private') : 'Partner view · linked';
   $('sync-label').textContent = stale ? 'Last synced · offline or unavailable' : 'Synced';
   $('sync-label').classList.toggle('stale', stale);
-  $('since-label').textContent = `${owner ? 'Selected' : 'Shared'} ${formatDate(state.since)}${stale && lastSync ? ` · last synced ${formatDate(lastSync)}` : ''}`;
+  $('since-label').textContent = `${state.estimated ? 'Estimated from' : owner ? 'Selected' : 'Shared'} ${formatDate(state.since)}${state.automation?.nextDate ? ` · Next ${formatDate(state.automation.nextDate)}` : ''}${stale && lastSync ? ` · last synced ${formatDate(lastSync)}` : ''}`;
   $('phase-strip').querySelectorAll('.phase-item').forEach((item, i) => {
     if (i === index) item.setAttribute('aria-current', 'step'); else item.removeAttribute('aria-current');
   });
@@ -113,10 +113,17 @@ function render() {
   $('disconnect').textContent = owner ? 'Disconnect partner' : 'Leave shared cycle';
   $('delete-section').hidden = !owner;
   $('delete-cycle').disabled = busy || stale;
-  $('notification-settings').hidden = owner;
+  $('automation-settings').hidden = !owner;
+  $('auto-save').disabled = busy || stale;
+  $('notification-settings').hidden = false;
   const enabled = Boolean(currentSubscription) && globalThis.Notification?.permission === 'granted';
   buttonContent($('enable-push'), enabled ? 'Notifications enabled' : 'Notify me of changes', enabled ? 'check' : 'arrow');
   $('enable-push').disabled = busy || stale || enabled || !config?.vapidPublicKey;
+  $('owner-enable-push').hidden = !owner || !state.automation?.enabled || !state.automation.reminders;
+  $('owner-enable-push').textContent = enabled ? 'Reminders enabled on this device' : 'Enable reminders on this device';
+  $('owner-enable-push').disabled = busy || stale || enabled || !config?.vapidPublicKey;
+  $('auto-notification-hint').textContent = owner && state.automation?.enabled && state.automation.reminders
+    ? config?.pushConfigurationError || (!config?.vapidPublicKey ? 'Notifications need to be configured on the server.' : enabled ? 'This device will receive a reminder the day before a scheduled change.' : 'Save the schedule, then enable reminders on this device. On iPhone, open the installed Home Screen app.') : '';
   $('disable-push').disabled = busy || stale || !currentSubscription;
   $('notification-status').textContent = enabled ? 'Notifications are enabled on this device.' : 'Notifications are off on this device.';
   $('push-hint').textContent = config?.pushConfigurationError || (!config?.vapidPublicKey ? 'Notifications will be available once the server is configured.'
@@ -190,7 +197,7 @@ async function disablePush() {
   toast('Notifications turned off on this device.');
 }
 async function syncSubscription() {
-  if (!swRegistration || state?.role !== 'viewer') return;
+  if (!swRegistration || !state) return;
   try {
     const subscription = await swRegistration.pushManager.getSubscription();
     if (subscription && Notification.permission === 'granted' && config?.vapidPublicKey) {
@@ -205,6 +212,20 @@ async function syncSubscription() {
   } catch { currentSubscription = null; }
   render();
 }
+function populateSchedule() {
+  if (state?.role !== 'owner') return;
+  const schedule = state.automation;
+  $('auto-enabled').checked = Boolean(schedule?.enabled);
+  $('auto-fields').disabled = !schedule?.enabled;
+  PHASES.forEach((phase) => { $(`auto-${phase.id}`).value = schedule?.days[phase.id] ?? ''; });
+  const timeZone = schedule?.timeZone || Intl.DateTimeFormat().resolvedOptions().timeZone;
+  $('auto-timezone').value = timeZone;
+  $('auto-start-label').textContent = `${phaseById(state.phase).name} started`;
+  const sinceParts = new Intl.DateTimeFormat('en-GB', { timeZone, year: 'numeric', month: '2-digit', day: '2-digit' }).formatToParts(new Date(state.since));
+  const since = Object.fromEntries(sinceParts.map((part) => [part.type, part.value]));
+  $('auto-start').value = schedule?.startDate || (/^\d{4}-\d{2}-\d{2}$/.test(state.since) ? state.since : `${since.year}-${since.month}-${since.day}`);
+  $('auto-reminders').checked = Boolean(schedule?.reminders);
+}
 function wire() {
   PHASES.forEach((phase) => {
     const item = document.createElement('span'); item.className = 'phase-item'; item.textContent = phase.short; $('phase-strip').append(item);
@@ -217,7 +238,7 @@ function wire() {
     })); $('phase-options').append(option);
   });
   document.querySelectorAll('.close-dialog').forEach((button) => button.addEventListener('click', () => button.closest('dialog').close()));
-  $('settings-open').addEventListener('click', () => { render(); open('settings-dialog'); });
+  $('settings-open').addEventListener('click', () => { render(); populateSchedule(); open('settings-dialog'); });
   $('start-owner').addEventListener('click', () => selectPhase('create'));
   $('start-viewer').addEventListener('click', () => open('join-dialog'));
   $('restore-open').addEventListener('click', () => open('restore-dialog'));
@@ -225,6 +246,18 @@ function wire() {
   $('next-phase').addEventListener('click', () => run(() => changePhase(PHASES[(PHASES.findIndex((p) => p.id === state.phase) + 1) % 4].id)));
   $('undo').addEventListener('click', () => run(() => changePhase(undefined, true)));
   $('refresh').addEventListener('click', () => run(() => refresh()));
+  $('auto-enabled').addEventListener('change', () => { $('auto-fields').disabled = !$('auto-enabled').checked; });
+  $('automation-form').addEventListener('submit', (event) => { event.preventDefault(); run(async () => {
+    const enabled = $('auto-enabled').checked;
+    const input = { version: state.version, enabled };
+    if (enabled) Object.assign(input, { reminders: $('auto-reminders').checked,
+      days: Object.fromEntries(PHASES.map((phase) => [phase.id, Number($(`auto-${phase.id}`).value)])),
+      startDate: $('auto-start').value, timeZone: $('auto-timezone').value.trim() });
+    const result = await request('automation', input);
+    setState(result.state); populateSchedule();
+    toast(result.notification.failed ? 'Schedule saved. A partner notification could not be delivered.' : enabled ? 'Schedule saved.' : 'Automatic switching paused.', Boolean(result.notification.failed));
+  }); });
+  $('owner-enable-push').addEventListener('click', () => run(enablePush));
   $('enable-push').addEventListener('click', () => run(enablePush));
   $('disable-push').addEventListener('click', () => run(disablePush));
   $('join-form').addEventListener('submit', (event) => { event.preventDefault(); run(async () => {
@@ -260,8 +293,8 @@ function wire() {
     }
   }));
   $('sign-out').addEventListener('click', () => run(async () => {
-    if (!confirm('Forget this device? Save your access key first. Partner notifications on this device will be removed.')) return;
-    if (state.role === 'viewer') {
+    if (!confirm('Forget this device? Save your access key first. Notifications on this device will be removed.')) return;
+    {
       const subscription = currentSubscription || await swRegistration?.pushManager.getSubscription();
       if (subscription) { await request('unsubscribe', { endpoint: subscription.endpoint }); await subscription.unsubscribe(); }
     }
