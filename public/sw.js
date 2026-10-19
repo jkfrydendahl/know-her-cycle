@@ -1,4 +1,4 @@
-const CACHE = 'khc-shell-v1.0.0-balanced-ui';
+const CACHE = 'khc-shell-v1.0.0-phase-emoji';
 const SHELL = ['/', '/index.html', '/styles.css', '/app.js', '/phases.js', '/icon.svg', '/icon-192.png', '/icon-512.png', '/apple-touch-icon.png', '/manifest.webmanifest'];
 self.addEventListener('install', (event) => { event.waitUntil(caches.open(CACHE).then((cache) => cache.addAll(SHELL))); });
 self.addEventListener('activate', (event) => {
