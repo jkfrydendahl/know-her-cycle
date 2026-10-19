@@ -73,12 +73,12 @@
             </div>
             <label id="auto-start-label" for="auto-start">Current phase started</label><input id="auto-start" type="date" required>
             <label for="auto-timezone">Time zone</label><input id="auto-timezone" type="text" placeholder="Europe/Copenhagen" autocomplete="off" spellcheck="false" required>
-            <label class="check-label"><input id="auto-reminders" type="checkbox"> Remind me the day before a change</label>
+            <label class="check-label"><input id="auto-reminders" type="checkbox"> Send day-before reminders</label>
           </fieldset>
           <p class="small-note">Checked daily in the morning in Denmark. A manual change starts that phase’s duration from today. Saving a past start date catches up to today’s estimated phase. You can pause this anytime.</p>
           <button id="auto-save" class="button secondary" type="submit">Save schedule</button>
         </form>
-        <button id="owner-enable-push" class="button secondary" hidden>Enable reminders on this device</button>
+        <button id="owner-enable-push" class="button secondary" hidden>Allow notifications on this phone</button>
         <p id="auto-notification-hint" class="small-note"></p>
       </section>
       <section class="settings-section"><h3 id="role-label">Sharing</h3><p id="sharing-label" class="dialog-copy"></p><button id="invite" class="button secondary">Create partner invitation</button><div id="invite-result" hidden><label for="invite-link">Single-use invitation</label><input id="invite-link" readonly><p id="invite-expiry" class="small-note"></p><button id="copy-invite" class="button secondary">Copy invitation</button><button id="share-invite" class="text-button">Share invitation</button></div><button id="disconnect" class="text-button danger" hidden>Disconnect partner</button></section>

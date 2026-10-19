@@ -19,7 +19,7 @@ In **Settings â†’ Automatic phases**, enter the number of days in each phase (1â
 
 - The server checks schedules once daily, even when both apps are closed. Automatically selected phases show **Estimated from**; the next scheduled date is shown beside the selection date.
 - A manual phase change becomes the new starting point **today**, preserving the four saved durations. In automatic mode, Undo also starts the restored phase from today. In manual mode, Undo retains its original behavior of restoring the earlier date.
-- **Remind me the day before a change** enables owner reminders. Save first, then tap **Enable reminders on this device**. Owner reminders and partner change notifications have separate subscriptions; up to five devices per role can subscribe.
+- **Send day-before reminders** enables owner reminders. Save first, then tap **Allow notifications on this phone**. Owner reminders and partner change notifications have separate subscriptions; up to five devices per role can subscribe.
 - Unchecking automatic switching and saving pauses it, retaining durations for later. Re-enabling uses the date you enter and catches up immediately if that phase would already have ended.
 - A missed daily run catches up to the current estimated phase on the next run, sending one current-status notification rather than a backlog. Expired reminders are skipped. Attempts are claimed before sending, so overlapping jobs do not duplicate reminders. Failed notifications are best effort and are not retried automatically.
 

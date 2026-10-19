@@ -163,7 +163,7 @@ test('owner can save an optional schedule, enable reminders and pause without lo
   await until(() => owner.$('toast').textContent === 'Schedule saved.' && !owner.$('auto-save').disabled);
   assert.match(owner.$('since-label').textContent, /Next/);
   owner.$('owner-enable-push').click();
-  await until(() => owner.$('owner-enable-push').textContent.includes('enabled'));
+  await until(() => owner.$('owner-enable-push').textContent.includes('allowed'));
   owner.$('auto-enabled').click();
   owner.$('automation-form').dispatchEvent(new owner.w.Event('submit', { bubbles: true, cancelable: true }));
   await until(() => owner.$('toast').textContent.includes('paused') && !owner.$('auto-save').disabled);
