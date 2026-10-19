@@ -1,0 +1,72 @@
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+  <meta name="theme-color" content="#f7f4ee">
+  <meta name="description" content="A small, shared space to stay in touch with her cycle. Manually updated, simply connected.">
+  <meta name="apple-mobile-web-app-capable" content="yes">
+  <meta name="apple-mobile-web-app-status-bar-style" content="default">
+  <title>Know Her Cycle</title>
+  <link rel="manifest" href="/manifest.webmanifest">
+  <link rel="icon" type="image/svg+xml" href="/icon.svg">
+  <link rel="apple-touch-icon" href="/apple-touch-icon.png">
+  <link rel="stylesheet" href="/styles.css">
+  <script type="module" src="/app.js"></script>
+</head>
+<body data-phase="menstrual">
+  <div class="shell">
+    <header class="header">
+      <a class="brand" href="/" aria-label="Know Her Cycle home"><svg viewBox="0 0 40 40" aria-hidden="true"><circle cx="20" cy="20" r="16"/><path d="M20 7c-8 8-8 18 0 26M20 7c8 8 8 18 0 26M7 20h26"/></svg><span>know her cycle<span class="brand-dot">.</span></span></a>
+      <button id="settings-open" class="icon-button" aria-label="Open settings" title="Settings"><svg viewBox="0 0 24 24" aria-hidden="true"><path d="M4 7h16M4 17h16"/><circle cx="9" cy="7" r="3"/><circle cx="15" cy="17" r="3"/></svg></button>
+    </header>
+
+    <main>
+      <section id="welcome" class="welcome" aria-labelledby="welcome-heading">
+        <span class="eyebrow">A little understanding goes a long way</span>
+        <h1 id="welcome-heading">Her cycle.<br>Shared understanding.</h1>
+        <p class="intro">One phase at a time.<br>A simple way to stay connected.</p>
+        <div class="welcome-mark" aria-hidden="true"><svg viewBox="0 0 200 200"><circle cx="100" cy="100" r="85"/><ellipse cx="100" cy="100" rx="43" ry="85"/><ellipse cx="100" cy="100" rx="85" ry="43"/><circle cx="100" cy="100" r="12"/></svg></div>
+        <div class="welcome-actions"><button id="start-owner" class="button primary">Track my cycle <span aria-hidden="true">↗</span></button><button id="start-viewer" class="button secondary">Join my partner</button></div>
+        <button id="restore-open" class="text-button subtle">Already set up? Restore access</button>
+        <p id="setup-note" class="small-note" role="status"></p>
+      </section>
+
+      <section id="tracker" class="tracker" aria-labelledby="phase-name" hidden>
+        <div class="tracker-top"><span id="connection" class="connection">Your cycle</span><span id="sync-label" class="sync-label">Synced</span></div>
+        <p id="phase-eyebrow" class="eyebrow"></p>
+        <h1 id="phase-name" class="phase-name" tabindex="-1"></h1>
+        <p id="phase-line" class="phase-line"></p>
+        <div class="cycle-art" aria-hidden="true">
+          <svg viewBox="0 0 320 320" class="cycle-ring"><circle class="ring-track" cx="160" cy="160" r="132"/><g transform="rotate(-88 160 160)"><circle class="ring-part part-0" cx="160" cy="160" r="132"/><circle class="ring-part part-1" cx="160" cy="160" r="132"/><circle class="ring-part part-2" cx="160" cy="160" r="132"/><circle class="ring-part part-3" cx="160" cy="160" r="132"/></g><circle class="inner-orbit" cx="160" cy="160" r="104"/><path class="petal" d="M160 102c-46 32-46 84 0 116 46-32 46-84 0-116Z"/><path class="petal" d="M102 160c32-46 84-46 116 0-32 46-84 46-116 0Z"/><circle class="center-dot" cx="160" cy="160" r="8"/></svg>
+          <span id="phase-number" class="phase-number"></span>
+        </div>
+        <div id="phase-strip" class="phase-strip" aria-label="Cycle phases"></div>
+        <p id="since-label" class="since-label"></p>
+        <div id="owner-actions" class="main-actions"><button id="next-phase" class="button primary"></button><div class="minor-actions"><button id="correct-phase" class="text-button">Change phase</button><span aria-hidden="true">·</span><button id="undo" class="text-button">Undo last change</button></div></div>
+        <div id="viewer-actions" class="main-actions" hidden><button id="enable-push" class="button primary">Notify me of changes <span aria-hidden="true">↗</span></button><p id="push-hint" class="small-note"></p></div>
+        <button id="refresh" class="text-button subtle">Refresh status</button>
+      </section>
+    </main>
+    <footer><span class="footer-flower" aria-hidden="true">✳</span> A rhythm to understand. A person to listen to.</footer>
+  </div>
+
+  <dialog id="phase-dialog" aria-labelledby="phase-dialog-title"><div class="dialog-heading"><span class="eyebrow">At your own pace</span><button class="icon-button close-dialog" aria-label="Close">×</button></div><h2 id="phase-dialog-title">Where are you now?</h2><p class="dialog-copy">Choose the phase you want to share.</p><div id="phase-options" class="phase-options"></div><p class="small-note">Manually selected. This app does not detect ovulation or predict fertility.</p></dialog>
+
+  <dialog id="join-dialog" aria-labelledby="join-title"><div class="dialog-heading"><span class="eyebrow">A shared space</span><button class="icon-button close-dialog" aria-label="Close">×</button></div><h2 id="join-title">Join your partner.</h2><p class="dialog-copy">Open her invitation link, or paste it below.</p><form id="join-form"><label for="invitation">Invitation link</label><input id="invitation" type="text" autocomplete="off" spellcheck="false" required placeholder="Paste the invitation link"><button class="button primary" type="submit">Connect with my partner <span aria-hidden="true">↗</span></button></form><p class="small-note">You’ll be able to see her selected phase. She controls updates and sharing.</p></dialog>
+
+  <dialog id="restore-dialog" aria-labelledby="restore-title"><div class="dialog-heading"><span class="eyebrow">Welcome back</span><button class="icon-button close-dialog" aria-label="Close">×</button></div><h2 id="restore-title">Restore access.</h2><p class="dialog-copy">Paste the private access key you saved in settings.</p><form id="restore-form"><label for="recovery-key">Private access key</label><input id="recovery-key" type="password" autocomplete="off" spellcheck="false" required><button class="button primary" type="submit">Restore this device</button></form><p class="small-note">No key? A partner can ask for a new invitation. If the tracking owner has lost all access, a new cycle is needed.</p></dialog>
+
+  <dialog id="settings-dialog" aria-labelledby="settings-title"><div class="dialog-heading"><span class="eyebrow">Your little space</span><button class="icon-button close-dialog" aria-label="Close">×</button></div><h2 id="settings-title">Settings.</h2>
+    <div id="session-settings" hidden>
+      <section class="settings-section"><h3 id="role-label">Sharing</h3><p id="sharing-label" class="dialog-copy"></p><button id="invite" class="button secondary">Create partner invitation</button><div id="invite-result" hidden><label for="invite-link">Single-use invitation</label><input id="invite-link" readonly><p id="invite-expiry" class="small-note"></p><button id="copy-invite" class="button secondary">Copy invitation</button><button id="share-invite" class="text-button">Share invitation</button></div><button id="disconnect" class="text-button danger" hidden>Disconnect partner</button></section>
+      <section id="notification-settings" class="settings-section" hidden><h3>Notifications</h3><p id="notification-status" class="dialog-copy"></p><button id="disable-push" class="button secondary">Turn off on this device</button></section>
+      <section class="settings-section"><h3>Keep your access</h3><p class="dialog-copy">Save your private access key somewhere safe before changing phones or clearing browser data. It grants access to this cycle.</p><button id="copy-key" class="button secondary">Copy private access key</button><button id="sign-out" class="text-button">Forget this device</button></section>
+      <section id="delete-section" class="settings-section" hidden><h3>Your data</h3><button id="delete-cycle" class="text-button danger">Delete cycle and disconnect all devices</button></section>
+    </div>
+    <section class="settings-section about"><h3>Simple, by design.</h3><p class="dialog-copy">Four colors. One shared status. Phases change only when you select them. Menstruation is shown separately for simplicity; it is part of the follicular phase.</p><p class="small-note">For shared awareness, not contraception or medical decisions. Everyone experiences their cycle differently.</p><p class="small-note">On iPhone, add to Home Screen before enabling notifications. Notifications use discreet text without the phase name.</p><p class="small-note">Version 1.0.0</p></section>
+  </dialog>
+  <div id="toast" role="status" aria-live="polite" hidden></div>
+  <noscript><p class="noscript">Enable JavaScript to use Know Her Cycle.</p></noscript>
+</body>
+</html>
