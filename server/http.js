@@ -1,5 +1,5 @@
 import { AppError, createService, hash } from './domain.js';
-import { pushReady, createNotifier } from './push.js';
+import { pushReady, createNotifier, vapidConfiguration } from './push.js';
 import { productionStore } from './store.js';
 
 const MUTATIONS = new Set(['create', 'invite', 'join', 'phase', 'disconnect', 'subscribe', 'unsubscribe', 'delete']);
@@ -17,10 +17,14 @@ export function createHandler({ store, notify, env = process.env, now } = {}) {
       if (!env.APP_ORIGIN || new URL(env.APP_ORIGIN).origin !== env.APP_ORIGIN) throw new AppError(503, 'Set APP_ORIGIN in the server configuration.');
       if (req.headers.origin && req.headers.origin !== env.APP_ORIGIN) throw new AppError(403, 'Origin not allowed.');
       if (req.headers['sec-fetch-site'] === 'cross-site') throw new AppError(403, 'Cross-site request rejected.');
-      if (action === 'config') return res.status(200).json({
-        vapidPublicKey: pushReady(env) ? env.VAPID_PUBLIC_KEY : null,
-        storageReady: Boolean(store || (env.UPSTASH_REDIS_REST_URL && env.UPSTASH_REDIS_REST_TOKEN))
-      });
+      if (action === 'config') {
+        const push = vapidConfiguration(env);
+        return res.status(200).json({
+          vapidPublicKey: push.details?.publicKey || null,
+          ...(push.error ? { pushConfigurationError: push.error } : {}),
+          storageReady: Boolean(store || (env.UPSTASH_REDIS_REST_URL && env.UPSTASH_REDIS_REST_TOKEN))
+        });
+      }
       if (method === 'POST') {
         if (!/^application\/json(?:;|$)/i.test(req.headers['content-type'] || '')) throw new AppError(415, 'Use application/json.');
         if (Number(req.headers['content-length'] || 0) > 12_288) throw new AppError(413, 'Request too large.');
@@ -47,7 +51,7 @@ export function createHandler({ store, notify, env = process.env, now } = {}) {
         case 'phase': result = await service.phase(token, req.body); break;
         case 'disconnect': result = await service.disconnect(token); break;
         case 'subscribe':
-          if (!pushReady(env)) throw new AppError(503, 'Notifications have not been configured yet.');
+          if (!pushReady(env)) throw new AppError(503, vapidConfiguration(env).error || 'Notifications have not been configured yet.');
           result = await service.subscribe(token, req.body.subscription); break;
         case 'unsubscribe': result = await service.unsubscribe(token, req.body.endpoint); break;
         case 'delete': result = await service.remove(token); break;

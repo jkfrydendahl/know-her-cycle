@@ -5,6 +5,7 @@ const SESSION_KEY = 'khc-access-v1', CACHE_KEY = 'khc-last-state-v1';
 let token = null, state = null, config = null, busy = false, stale = true, swRegistration = null;
 let phaseMode = 'create', toastTimer, currentSubscription = null, pollTimer;
 let lastSync = null;
+let renderedPhase = null;
 function load(key) { try { return JSON.parse(localStorage.getItem(key)); } catch { return null; } }
 function persist(key, value) {
   try { localStorage.setItem(key, JSON.stringify(value)); }
@@ -37,7 +38,7 @@ function remember(result) {
 }
 function forget() {
   localStorage.removeItem(SESSION_KEY); localStorage.removeItem(CACHE_KEY);
-  token = null; state = null; lastSync = null; stale = true; currentSubscription = null;
+  token = null; state = null; lastSync = null; stale = true; currentSubscription = null; renderedPhase = null;
   $('invite-result').hidden = true; $('invite-link').value = ''; render();
 }
 async function run(work) {
@@ -81,7 +82,15 @@ function render() {
     return;
   }
   const phase = phaseById(state.phase), index = PHASES.indexOf(phase), owner = state.role === 'owner';
+  const phaseChanged = renderedPhase !== null && renderedPhase !== phase.id;
+  renderedPhase = phase.id;
   document.body.dataset.phase = phase.id;
+  if (phaseChanged && !matchMedia('(prefers-reduced-motion: reduce)').matches) {
+    const art = document.querySelector('.cycle-art');
+    art.getAnimations?.().forEach((animation) => animation.cancel());
+    art.animate?.([{ opacity: 0.45, transform: 'scale(.97)' }, { opacity: 1, transform: 'scale(1)' }],
+      { duration: 450, easing: 'ease-out' });
+  }
   $('phase-eyebrow').textContent = phase.eyebrow; $('phase-name').textContent = `${phase.name} ${phase.emoji}`;
   $('phase-line').textContent = phase.line; $('phase-number').textContent = `0${index + 1} / 04`;
   $('connection').textContent = owner ? (state.linked ? 'Your cycle · partner linked' : 'Your cycle · private') : 'Partner view · linked';
@@ -110,8 +119,8 @@ function render() {
   $('enable-push').disabled = busy || stale || enabled || !config?.vapidPublicKey;
   $('disable-push').disabled = busy || stale || !currentSubscription;
   $('notification-status').textContent = enabled ? 'Notifications are enabled on this device.' : 'Notifications are off on this device.';
-  $('push-hint').textContent = !config?.vapidPublicKey ? 'Notifications will be available once the server is configured.'
-    : enabled ? 'We’ll let you know when the shared status changes.' : 'Optional. One notification when she updates the phase.';
+  $('push-hint').textContent = config?.pushConfigurationError || (!config?.vapidPublicKey ? 'Notifications will be available once the server is configured.'
+    : enabled ? 'We’ll let you know when the shared status changes.' : 'Optional. One notification when she updates the phase.');
 }
 async function refresh(quiet = false) {
   if (!token) return;
@@ -133,7 +142,7 @@ async function changePhase(phase, undo = false) {
   setState(result.state);
   if ($('phase-dialog').open) close('phase-dialog');
   $('phase-name').focus({ preventScroll: true });
-  toast(result.notification.failed ? 'Phase saved. A partner notification could not be delivered.' : undo ? 'Last change undone.' : 'Phase updated.');
+  toast(result.notification.failed ? `Phase saved. ${result.notification.reason || 'A partner notification could not be delivered.'}` : undo ? 'Last change undone.' : 'Phase updated.', Boolean(result.notification.failed));
 }
 function invitationFrom(value) {
   const trimmed = value.trim();
@@ -150,6 +159,12 @@ function vapidBytes(value) {
   const padded = value.replace(/-/g, '+').replace(/_/g, '/') + '='.repeat((4 - value.length % 4) % 4);
   return Uint8Array.from(atob(padded), (character) => character.charCodeAt(0));
 }
+function subscriptionKeyMatches(subscription) {
+  const key = subscription.options?.applicationServerKey;
+  if (!key || !config?.vapidPublicKey) return false;
+  const actual = new Uint8Array(key), expected = vapidBytes(config.vapidPublicKey);
+  return actual.length === expected.length && actual.every((byte, index) => byte === expected[index]);
+}
 async function enablePush() {
   // Call permission immediately in the click gesture, before network requests.
   if (!('Notification' in window) || !('PushManager' in window) || !swRegistration) throw new Error('Push notifications are not supported on this browser.');
@@ -157,7 +172,11 @@ async function enablePush() {
   if (ios && !matchMedia('(display-mode: standalone)').matches && !navigator.standalone) throw new Error('On iPhone or iPad, add this app to the Home Screen, open it there, then enable notifications.');
   const permission = await Notification.requestPermission();
   if (permission !== 'granted') throw new Error('Notifications were not allowed. You can change this in your phone or browser settings.');
-  const existing = await swRegistration.pushManager.getSubscription();
+  let existing = await swRegistration.pushManager.getSubscription();
+  if (existing && !subscriptionKeyMatches(existing)) {
+    await request('unsubscribe', { endpoint: existing.endpoint });
+    await existing.unsubscribe(); existing = null;
+  }
   const subscription = existing || await swRegistration.pushManager.subscribe({ userVisibleOnly: true, applicationServerKey: vapidBytes(config.vapidPublicKey) });
   try {
     const result = await request('subscribe', { subscription: subscription.toJSON() });
@@ -175,6 +194,12 @@ async function syncSubscription() {
   try {
     const subscription = await swRegistration.pushManager.getSubscription();
     if (subscription && Notification.permission === 'granted' && config?.vapidPublicKey) {
+      if (!subscriptionKeyMatches(subscription)) {
+        await request('unsubscribe', { endpoint: subscription.endpoint });
+        await subscription.unsubscribe(); currentSubscription = null;
+        toast('Notification keys changed. Enable notifications again on this device.');
+        render(); return;
+      }
       await request('subscribe', { subscription: subscription.toJSON() }); currentSubscription = subscription;
     }
   } catch { currentSubscription = null; }

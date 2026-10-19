@@ -42,6 +42,17 @@ Install using **Add to Home Screen** on iPhone/iPad, then open the installed app
 
 Notifications contain only “Cycle status updated”, without a phase name. Tapping one opens the current shared status. Delivery depends on the browser's push service, connectivity and device settings; it is not guaranteed. The API reports delivery failures without rolling back the saved status. It does not automatically retry transient push failures. Expired push endpoints are removed after 404/410 responses. Up to five partner devices can subscribe; switching off one device preserves the others.
 
+### If a notification cannot be delivered
+
+The phase is saved even when push delivery fails. The app now shows a safe diagnostic reason instead of only a generic failure.
+
+- Open `/api/config` on your deployed origin. A `pushConfigurationError` identifies incomplete setup, malformed keys, or a public/private key mismatch. This endpoint never returns the private key.
+- Use the public and private VAPID keys from the **same** generated pair. The server trims surrounding whitespace, accepts optional Base64 padding, and accepts either a bare contact email or its `mailto:` form.
+- A provider response such as `403 BadJwtToken` points to push authentication. Check `VAPID_CONTACT`, the matching VAPID pair, and redeploy after correcting environment variables.
+- A subscription is bound to the public VAPID key used when it was created. If that key changes, reopen the partner app; it will remove the stale subscription and ask to enable notifications again. Do not generate fresh keys on every deployment.
+- For expired subscriptions (404/410), turn notifications off and on again on the partner device. For temporary network/provider failures, retry later.
+- Vercel function logs include only status codes and a small allowlist of provider reason names, never full push endpoints, authorization headers, subscription keys or private VAPID keys.
+
 ### First deployment smoke check
 
 - On the tracking phone, create a cycle and save the private access key from settings.
