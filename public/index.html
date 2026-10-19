@@ -24,8 +24,8 @@
     <main>
       <section id="welcome" class="welcome" aria-labelledby="welcome-heading">
         <span class="eyebrow">A little understanding goes a long way</span>
-        <h1 id="welcome-heading">Her cycle.<br>Shared understanding.</h1>
-        <p class="intro">One phase at a time.<br>A simple way to stay connected.</p>
+        <h1 id="welcome-heading" class="sr-only">Know Her Cycle</h1>
+        <p class="intro">One phase at a time. Stay connected.</p>
         <div class="welcome-mark" aria-hidden="true"><svg viewBox="0 0 200 200"><circle cx="100" cy="100" r="85"/><ellipse cx="100" cy="100" rx="43" ry="85"/><ellipse cx="100" cy="100" rx="85" ry="43"/><circle cx="100" cy="100" r="12"/></svg></div>
         <div class="welcome-actions"><button id="start-owner" class="button primary">Track my cycle <svg class="ui-icon" viewBox="0 0 24 24" aria-hidden="true" focusable="false"><path d="M6 18 18 6M6 6h12v12"/></svg></button><button id="start-viewer" class="button secondary">Join my partner</button></div>
         <button id="restore-open" class="text-button subtle">Already set up? Restore access</button>
@@ -33,7 +33,7 @@
       </section>
 
       <section id="tracker" class="tracker" aria-labelledby="phase-name" hidden>
-        <div class="tracker-top"><span id="connection" class="connection">Your cycle</span><span id="sync-label" class="sync-label">Synced</span></div>
+        <div class="tracker-top"><span id="connection" class="connection">Your cycle</span><div class="sync-controls"><span id="sync-label" class="sync-label">Synced</span><button id="refresh" class="icon-button refresh-button" aria-label="Refresh status" title="Refresh status"><svg class="ui-icon" viewBox="0 0 24 24" aria-hidden="true" focusable="false"><path d="M20 7v5h-5M4 17v-5h5M18.5 7A7 7 0 0 0 6 6l-2 3m16 6-2 3a7 7 0 0 1-12.5-1"/></svg></button></div></div>
         <p id="phase-eyebrow" class="eyebrow"></p>
         <h1 id="phase-name" class="phase-name" tabindex="-1"></h1>
         <p id="phase-line" class="phase-line"></p>
@@ -45,7 +45,6 @@
         <p id="since-label" class="since-label"></p>
         <div id="owner-actions" class="main-actions"><button id="next-phase" class="button primary"></button><div class="minor-actions"><button id="correct-phase" class="text-button">Change phase</button><span aria-hidden="true">·</span><button id="undo" class="text-button">Undo last change</button></div></div>
         <div id="viewer-actions" class="main-actions" hidden><button id="enable-push" class="button primary">Notify me of changes <svg class="ui-icon" viewBox="0 0 24 24" aria-hidden="true" focusable="false"><path d="M6 18 18 6M6 6h12v12"/></svg></button><p id="push-hint" class="small-note"></p></div>
-        <button id="refresh" class="text-button subtle">Refresh status</button>
       </section>
     </main>
     <footer><svg class="ui-icon footer-flower" viewBox="0 0 24 24" aria-hidden="true" focusable="false"><path d="M12 3v18M3 12h18M5.64 5.64l12.72 12.72M18.36 5.64 5.64 18.36"/></svg> A rhythm to understand. A person to listen to.</footer>
