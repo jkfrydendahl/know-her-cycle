@@ -82,7 +82,7 @@ function render() {
   }
   const phase = phaseById(state.phase), index = PHASES.indexOf(phase), owner = state.role === 'owner';
   document.body.dataset.phase = phase.id;
-  $('phase-eyebrow').textContent = phase.eyebrow; $('phase-name').textContent = phase.name;
+  $('phase-eyebrow').textContent = phase.eyebrow; $('phase-name').textContent = `${phase.name} ${phase.emoji}`;
   $('phase-line').textContent = phase.line; $('phase-number').textContent = `0${index + 1} / 04`;
   $('connection').textContent = owner ? (state.linked ? 'Your cycle · partner linked' : 'Your cycle · private') : 'Partner view · linked';
   $('sync-label').textContent = stale ? 'Last synced · offline or unavailable' : 'Synced';
@@ -184,7 +184,7 @@ function wire() {
   PHASES.forEach((phase) => {
     const item = document.createElement('span'); item.className = 'phase-item'; item.textContent = phase.short; $('phase-strip').append(item);
     const option = document.createElement('button'); option.type = 'button'; option.className = 'phase-option'; option.dataset.phase = phase.id;
-    const label = document.createElement('span'); label.textContent = phase.name; option.append(label, icon('arrow'));
+    const label = document.createElement('span'); label.textContent = `${phase.name} ${phase.emoji}`; option.append(label, icon('arrow'));
     option.addEventListener('click', () => run(async () => {
       if (phaseMode === 'create') { remember(await request('create', { phase: phase.id }, null)); close('phase-dialog'); }
       else if (state.phase === phase.id) close('phase-dialog');
