@@ -120,10 +120,10 @@ function render() {
   buttonContent($('enable-push'), enabled ? 'Notifications enabled' : 'Notify me of changes', enabled ? 'check' : 'arrow');
   $('enable-push').disabled = busy || stale || enabled || !config?.vapidPublicKey;
   $('owner-enable-push').hidden = !owner || !state.automation?.enabled || !state.automation.reminders;
-  $('owner-enable-push').textContent = enabled ? 'Reminders enabled on this device' : 'Enable reminders on this device';
+  $('owner-enable-push').textContent = enabled ? 'Notifications allowed on this phone' : 'Allow notifications on this phone';
   $('owner-enable-push').disabled = busy || stale || enabled || !config?.vapidPublicKey;
   $('auto-notification-hint').textContent = owner && state.automation?.enabled && state.automation.reminders
-    ? config?.pushConfigurationError || (!config?.vapidPublicKey ? 'Notifications need to be configured on the server.' : enabled ? 'This device will receive a reminder the day before a scheduled change.' : 'Save the schedule, then enable reminders on this device. On iPhone, open the installed Home Screen app.') : '';
+    ? config?.pushConfigurationError || (!config?.vapidPublicKey ? 'Notifications need to be configured on the server.' : enabled ? 'This device will receive a reminder the day before a scheduled change.' : 'Reminders are turned on for your cycle. Allow notifications on this phone to receive them here. On iPhone, open the installed Home Screen app.') : '';
   $('disable-push').disabled = busy || stale || !currentSubscription;
   $('notification-status').textContent = enabled ? 'Notifications are enabled on this device.' : 'Notifications are off on this device.';
   $('push-hint').textContent = config?.pushConfigurationError || (!config?.vapidPublicKey ? 'Notifications will be available once the server is configured.'
