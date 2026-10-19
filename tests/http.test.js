@@ -1,0 +1,39 @@
+import test from 'node:test';
+import assert from 'node:assert/strict';
+import { createHandler } from '../server/http.js';
+import { memoryStore } from '../server/memory-store.js';
+
+const env = { APP_ORIGIN: 'https://cycle.example' };
+function fixture() {
+  const handler = createHandler({ store: memoryStore(), env });
+  return async (action, { method = 'POST', body = {}, token, origin = env.APP_ORIGIN, headers = {} } = {}) => {
+    const response = { headers: {}, setHeader(key, value) { this.headers[key] = value; }, status(code) { this.code = code; return this; }, json(data) { this.data = data; return this; } };
+    await handler({ query: { action }, method, body, headers: { origin, 'content-type': 'application/json',
+      ...(token ? { authorization: `Bearer ${token}` } : {}), ...headers }, socket: { remoteAddress: 'test' } }, response);
+    return response;
+  };
+}
+test('API enforces method, origin, JSON, authentication, and no-store', async () => {
+  const call = fixture();
+  assert.equal((await call('create', { origin: 'https://evil.example', body: { phase: 'menstrual' } })).code, 403);
+  assert.equal((await call('create', { method: 'GET' })).code, 405);
+  assert.equal((await call('phase')).code, 401);
+  assert.equal((await call('create', { headers: { 'content-type': 'text/plain' } })).code, 415);
+  assert.equal((await call('create', { body: { phase: 'no' } })).code, 400);
+  assert.equal((await call('create', { headers: { 'content-length': '20000' } })).code, 413);
+  const created = await call('create', { body: { phase: 'menstrual' } });
+  assert.equal(created.code, 201); assert.equal(created.headers['Cache-Control'], 'no-store');
+  const state = await call('state', { method: 'GET', token: created.data.token });
+  assert.equal(state.code, 200); assert.equal(state.data.state.phase, 'menstrual');
+});
+test('configuration exposes only public push key and readiness flags', async () => {
+  const call = fixture(), result = await call('config', { method: 'GET' });
+  assert.deepEqual(result.data, { vapidPublicKey: null, storageReady: true });
+});
+test('pairing attempts are rate limited and unconfigured push does not accept subscriptions', async () => {
+  const call = fixture();
+  for (let i = 0; i < 15; i++) assert.notEqual((await call('join', { body: { invitation: 'bad' } })).code, 429);
+  assert.equal((await call('join', { body: { invitation: 'bad' } })).code, 429);
+  const owner = await call('create', { body: { phase: 'menstrual' } });
+  assert.equal((await call('subscribe', { token: owner.data.token, body: { subscription: {} } })).code, 503);
+});
