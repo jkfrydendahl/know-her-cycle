@@ -7,8 +7,13 @@
 .refresh-button{width:44px;height:44px;border:0;padding:0;flex-shrink:0}
 .refresh-button .ui-icon{display:block;width:24px;height:24px;fill:none;stroke-width:1.8}
 @media(max-width:600px){
-  .shell{padding:0 22px}
-  .header{height:72px}
+  /* Use spare viewport space to balance the page instead of enlarging content.
+     A minimum height lets short screens and larger text scroll naturally. */
+  .shell{padding:0 22px;min-height:100vh;min-height:100svh;display:flex;flex-direction:column}
+  .shell>main{flex:1;display:flex;flex-direction:column;justify-content:center}
+  .shell>main>.welcome,.shell>main>.tracker{width:100%}
+  .shell>footer{flex-shrink:0}
+  .header{height:72px;flex-shrink:0}
   .brand{font-size:16px}.brand svg{width:30px}
   .welcome{padding:26px 0 4px}
   .intro{font-size:14px;line-height:1.6;margin:12px 0}
