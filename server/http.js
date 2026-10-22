@@ -3,7 +3,7 @@ import { pushReady, createNotifier, vapidConfiguration } from './push.js';
 import { productionStore } from './store.js';
 import { checkCronAuthorization, runDailyCheck } from './cron.js';
 
-const MUTATIONS = new Set(['create', 'invite', 'join', 'phase', 'automation', 'disconnect', 'subscribe', 'unsubscribe', 'delete']);
+const MUTATIONS = new Set(['create', 'invite', 'join', 'phase', 'automation', 'test-reminder', 'disconnect', 'subscribe', 'unsubscribe', 'delete']);
 export function createHandler({ store, notify, env = process.env, now } = {}) {
   let backingStore = store;
   return async function handler(req, res) {
@@ -12,7 +12,7 @@ export function createHandler({ store, notify, env = process.env, now } = {}) {
     res.setHeader('Vary', 'Origin');
     try {
       const action = req.query?.action;
-      if (!['config', 'state', 'cron', ...MUTATIONS].includes(action)) throw new AppError(404, 'Not found.');
+      if (!['config', 'state', 'diagnostics', 'cron', ...MUTATIONS].includes(action)) throw new AppError(404, 'Not found.');
       const method = MUTATIONS.has(action) ? 'POST' : 'GET';
       if (req.method !== method) { res.setHeader('Allow', method); throw new AppError(405, 'Method not allowed.'); }
       if (!env.APP_ORIGIN || new URL(env.APP_ORIGIN).origin !== env.APP_ORIGIN) throw new AppError(503, 'Set APP_ORIGIN in the server configuration.');
@@ -51,6 +51,8 @@ export function createHandler({ store, notify, env = process.env, now } = {}) {
       switch (action) {
         case 'create': result = await service.create(req.body.phase); break;
         case 'state': result = { state: await service.state(token) }; break;
+        case 'diagnostics': result = await service.diagnostics(token); break;
+        case 'test-reminder': result = await service.testReminder(token); break;
         case 'invite': result = await service.invite(token); break;
         case 'join': result = await service.join(req.body.invitation); break;
         case 'phase': result = await service.phase(token, req.body); break;

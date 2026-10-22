@@ -1,4 +1,5 @@
 import { createHash, randomBytes, timingSafeEqual } from 'node:crypto';
+import { RETENTION_MS, writeDiagnostic } from './diagnostics.js';
 import { PHASES, phaseById } from '../public/phases.js';
 import { addDays, localDate, nextDate, projection, validDate, validDurations, validTimeZone } from './schedule.js';
 
@@ -72,15 +73,15 @@ export function createService({ store, notify = async () => ({ sent: 0, failed: 
     const role = roleOf(snapshot.value, digest);
     return publicState(snapshot.value, role);
   }
-  async function delivery(id, changed, reminder = false) {
+  async function delivery(id, changed, reminder = false, test = false) {
     try {
       // Recheck membership after saving; never broadcast across cycles.
       const current = (await store.read(id))?.value;
       if (!current || current.version !== changed.version || current.viewer !== changed.viewer) return { sent: 0, failed: 0 };
-      if (reminder && (!current.automation?.enabled || !current.automation.reminders
+      if (reminder && !test && (!current.automation?.enabled || !current.automation.reminders
         || current.automation.reminderKey !== changed.automation.reminderKey)) return { sent: 0, failed: 0 };
       const field = reminder ? 'ownerSubscriptions' : 'subscriptions';
-      const result = await notify({ id, version: changed.version, type: reminder ? 'reminder' : 'change', subscriptions: Object.values(current[field] || {}) });
+      const result = await notify({ id, version: changed.version, type: test ? 'test-reminder' : reminder ? 'reminder' : 'change', subscriptions: Object.values(current[field] || {}) });
       if (result.expired?.length) {
         for (let attempt = 0; attempt < 3; attempt++) {
           const snapshot = await store.read(id);
@@ -95,6 +96,33 @@ export function createService({ store, notify = async () => ({ sent: 0, failed: 
   }
   return {
     state,
+    async diagnostics(token) {
+      const { id } = parseCredential(token);
+      await state(token);
+      const since = now().getTime() - RETENTION_MS;
+      const [events, cron] = await Promise.all([store.readDiagnostics(id, since), store.readDiagnostics('cron', since)]);
+      const latest = await store.read(id);
+      if (!latest) fail(401, 'This cycle is no longer available.');
+      roleOf(latest.value, parseCredential(token).digest); // Recheck access after reading history.
+      return { events, cron, ownerDevices: Object.keys(latest.value.ownerSubscriptions || {}).length };
+    },
+    async testReminder(token) {
+      const { id, digest } = parseCredential(token);
+      const snapshot = await store.read(id);
+      if (!snapshot) fail(401, 'This cycle is no longer available.');
+      roleOf(snapshot.value, digest); // Either the tracking owner or their linked partner.
+      if (await store.limit(hash(`test-reminder:${id}`), 3, 600)) fail(429, 'Up to three test reminders every ten minutes. Please wait before trying again.');
+      const devices = Object.keys(snapshot.value.ownerSubscriptions || {}).length;
+      await writeDiagnostic(store, id, { kind: 'test-started', ownerDevices: devices }, now);
+      if (!devices) {
+        await writeDiagnostic(store, id, { kind: 'test-result', status: 'no-subscription', ownerDevices: 0, sent: 0, failed: 0 }, now);
+        return { notification: { sent: 0, failed: 0 }, ownerDevices: 0 };
+      }
+      const notification = await delivery(id, snapshot.value, true, true);
+      await writeDiagnostic(store, id, { kind: 'test-result', status: notification.failed ? 'failed' : notification.sent ? 'accepted' : 'skipped',
+        ownerDevices: devices, ...notification }, now);
+      return { notification, ownerDevices: devices };
+    },
     async automation(token, input) {
       if (!Number.isSafeInteger(input.version) || typeof input.enabled !== 'boolean') fail(400, 'Refresh before saving the schedule.');
       if (input.enabled && (typeof input.reminders !== 'boolean' || !validDurations(input.days)
@@ -137,13 +165,19 @@ export function createService({ store, notify = async () => ({ sent: 0, failed: 
         }
         const due = nextDate(record), reminderKey = `${record.phase}:${schedule.startDate}:${due}`;
         const reminded = schedule.reminders && due === addDays(today, 1) && schedule.reminderKey !== reminderKey;
-        if (!advanced && !reminded) return { advanced: false, reminded: false, failed: 0 };
+        if (!advanced && !reminded) return { advanced: false, reminded: false, failed: 0,
+          reminderDue: due === addDays(today, 1), remindersEnabled: schedule.reminders,
+          alreadyAttempted: schedule.reminderKey === reminderKey, ownerDevices: Object.keys(record.ownerSubscriptions || {}).length };
         if (reminded) schedule.reminderKey = reminderKey;
         if (!await store.compare(id, snapshot.raw, record)) continue;
         // Claim attempts atomically before sending: retries cannot duplicate them.
         const sent = await Promise.all([advanced ? delivery(id, record) : { failed: 0 },
           reminded ? delivery(id, record, true) : { failed: 0 }]);
-        return { advanced, reminded, failed: sent.reduce((sum, item) => sum + item.failed, 0) };
+        return { advanced, reminded, failed: sent.reduce((sum, item) => sum + item.failed, 0),
+          reminderDue: due === addDays(today, 1), remindersEnabled: schedule.reminders,
+          ownerDevices: Object.keys(record.ownerSubscriptions || {}).length,
+          reminderSent: sent[1].sent || 0, reminderFailed: sent[1].failed || 0,
+          ...(sent[1].reason ? { reason: sent[1].reason } : {}) };
       }
       fail(409, 'The cycle kept changing during the daily check.');
     },

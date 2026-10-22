@@ -1,4 +1,5 @@
 import { Redis } from '@upstash/redis';
+import { RETENTION_MS } from './diagnostics.js';
 
 export const CAS_SCRIPT = `
 if redis.call('GET', KEYS[1]) ~= ARGV[1] then return 0 end
@@ -13,11 +14,24 @@ return 1`;
 export const REMOVE_SCRIPT = `
 if redis.call('GET', KEYS[1]) ~= ARGV[1] then return 0 end
 redis.call('SREM', KEYS[2], ARGV[2])
+redis.call('DEL', KEYS[3])
 return redis.call('DEL', KEYS[1])`;
 export const LIMIT_SCRIPT = `
 local count = redis.call('INCR', KEYS[1])
 if count == 1 then redis.call('EXPIRE', KEYS[1], ARGV[1]) end
 return count`;
+
+
+export const DIAGNOSTIC_SCRIPT = `
+if ARGV[4] == 'cycle' and redis.call('EXISTS', KEYS[2]) == 0 then return 0 end
+redis.call('ZADD', KEYS[1], ARGV[1], ARGV[2])
+redis.call('ZREMRANGEBYSCORE', KEYS[1], '-inf', ARGV[3])
+redis.call('ZREMRANGEBYRANK', KEYS[1], 0, -201)
+redis.call('EXPIRE', KEYS[1], 604800)
+return 1`;
+export const READ_DIAGNOSTIC_SCRIPT = `
+redis.call('ZREMRANGEBYSCORE', KEYS[1], '-inf', ARGV[1])
+return redis.call('ZREVRANGE', KEYS[1], 0, 199)`;
 
 export function createStore(redis) {
   const key = (id) => `khc:cycle:${id}`;
@@ -33,7 +47,16 @@ export function createStore(redis) {
       return Number(await redis.eval(CAS_SCRIPT, [key(id), 'khc:scheduled'], [expected, JSON.stringify(value), id])) === 1;
     },
     async remove(id, expected) {
-      return Number(await redis.eval(REMOVE_SCRIPT, [key(id), 'khc:scheduled'], [expected, id])) === 1;
+      return Number(await redis.eval(REMOVE_SCRIPT, [key(id), 'khc:scheduled', `khc:diagnostics:${id}`], [expected, id])) === 1;
+    },
+    async appendDiagnostic(id, event) {
+      const time = Date.parse(event.at);
+      await redis.eval(DIAGNOSTIC_SCRIPT, [`khc:diagnostics:${id}`, key(id)],
+        [time, JSON.stringify(event), time - RETENTION_MS, id === 'cron' ? 'global' : 'cycle']);
+    },
+    async readDiagnostics(id, since) {
+      const entries = await redis.eval(READ_DIAGNOSTIC_SCRIPT, [`khc:diagnostics:${id}`], [since]);
+      return entries.map((entry) => JSON.parse(entry));
     },
     async *scheduled() {
       let cursor = 0;

@@ -44,3 +44,13 @@ test('reminders use an allowlisted message with no supplied phase details or ext
   assert.equal(w.notifications[0][1].data.url, '/');
   assert.equal(w.notifications[0][1].tag, 'khc-phase-reminder');
 });
+
+test('test reminders are clearly labelled and ignore supplied content', async () => {
+  const w = worker(); let task;
+  w.handlers.push({ data: { json: () => ({ type: 'test-reminder', title: 'spoofed', body: 'private', url: 'https://evil.example' }) }, waitUntil(promise) { task = promise; } });
+  await task;
+  assert.equal(w.notifications[0][0], 'Test reminder');
+  assert.equal(w.notifications[0][1].body, 'This is a test reminder. No phase change is scheduled by this message.');
+  assert.equal(w.notifications[0][1].data.url, '/');
+  assert.equal(w.notifications[0][1].tag, 'khc-test-reminder');
+});

@@ -47,6 +47,16 @@ The phase is saved even when push delivery fails. The app now shows a safe diagn
 - For expired subscriptions (404/410), turn notifications off and on again on the partner device. For temporary network/provider failures, retry later.
 - Vercel function logs include only status codes and a small allowlist of provider reason names, never full push endpoints, authorization headers, subscription keys or private VAPID keys.
 
+### Test reminders and retained diagnostics
+
+In **Settings → Notifications**, either the owner or the currently linked partner can send a test reminder to the tracking person's existing owner subscriptions. The partner button reads **Send her a test reminder**; it does not use the partner's own push subscription. All enabled owner devices receive it, without revealing their endpoints. No access key sharing or schedule editing is needed. Tests have distinct fixed text and are limited to three per cycle every ten minutes.
+
+Open **Notification history · last 7 days** to see daily job start/completion markers, checks for this cycle, whether a reminder was due, whether reminders were enabled, subscription counts, and push acceptance/failure results. Tests appear in the same history. Acceptance means the push service accepted the request, not confirmation that a phone displayed it. If no owner subscription exists, enable notifications in the installed app on the tracking phone first.
+
+History starts after this version is deployed; it cannot recover earlier events. If a job never starts, there will be no start marker. If storage is unavailable, the app cannot persist diagnostics either, so absence of a record does not establish why a job is missing. Diagnostic write failures are logged safely and do not block scheduling or push attempts. Processing failures produce a failure marker when storage remains available. There are no automatic retries added by these diagnostics.
+
+Redis keys `khc:diagnostics:<cycle-id>` and `khc:diagnostics:cron` retain at most 200 entries each. Writes expire keys after seven days, and writes/reads remove entries more than seven days old. Per-cycle entries contain timestamps, event types, counts, status flags, and safe provider error summaries; no phase names, raw access keys, push endpoints or subscription keys. Only authenticated cycle members can read that cycle's history. The shared daily-job history exposes timestamps and job status, without other cycles' data or counts. Deleting a cycle removes its diagnostic history atomically; shared job markers contain no cycle identifiers.
+
 ### First deployment smoke check
 
 - On the tracking phone, create a cycle and save the private access key from settings.
@@ -56,13 +66,14 @@ The phase is saved even when push delivery fails. The app now shows a safe diagn
 - Disconnect the partner and confirm their next refresh removes access. Check that subsequent changes no longer target their subscriptions.
 - Enable automatic phases with a current start date and verify the next date. Save a manual correction and confirm it restarts the schedule from today. Enable owner reminders on the installed tracking app.
 - In production, check the scheduled job in Vercel and verify a day-before reminder and the following phase change on both phones. Check that repeated runs do not resend the reminder. Keep the cron secret out of screenshots and logs.
+- From the linked partner settings, send a test reminder. Confirm it appears on the tracking phone, uses the test text, and leaves the schedule unchanged. Inspect history from both views.
 - With the app previously opened, go offline and check that cached status is marked as stale and edits are disabled.
 
 ## Storage, access and privacy
 
 - No email, password, personal names, symptoms, analytics or third-party frontend assets.
 - Each credential has a random cycle identifier and a 256-bit secret. Redis stores SHA-256 hashes of access and invitation credentials; the browser stores its own raw access credential locally. An access key grants its role's permissions. Keep it private.
-- The tracking person controls status, invitations, disconnection and deletion. The partner can view, manage notifications on their devices, or leave. The backend enforces permissions, not just the interface.
+- The tracking person controls status, invitations, disconnection and deletion. The partner can view, manage notifications on their devices, send a test reminder to owner devices, inspect notification history, or leave. The backend enforces permissions, not just the interface.
 - Invitations travel in URL fragments, so their secrets are not sent in HTTP request URLs or Referer headers. The app removes the fragment before further interaction. Invite redemption exchanges the invitation for a separate viewer credential.
 - Each cycle is isolated in `khc:cycle:<random-id>`. It stores the current phase/date, one previous phase/date for undo, credential hashes, one pending invitation, partner and owner push subscriptions, and optional schedule settings (durations, time zone, phase start date, last reminder claim). No cycle-history timeline is retained. Records remain until the owner deletes them; rate-limit counters expire automatically. The `khc:scheduled` Redis set contains only cycle IDs with automatic switching enabled; saving or deleting a record updates this index atomically. The `khc:limit:*` keys remain temporary request-rate counters.
 - Atomic Redis compare-and-swap operations prevent invitation reuse, stale writes and subscription changes overwriting each other. Phase versions prevent a double tap or an old device overwriting a newer update.
@@ -99,6 +110,7 @@ server/store.js     Upstash storage with atomic compare-and-swap
 server/push.js      Web Push sender
 server/schedule.js  Calendar-day scheduling and validation
 server/cron.js      Authenticated daily processing
+server/diagnostics.js Seven-day diagnostic retention and safe writes
 server/http.js      API validation and rate limiting
 scripts/            Local server and static checks
 tests/              Domain, API and DOM integration tests
