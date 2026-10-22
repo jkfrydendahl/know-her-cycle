@@ -22,6 +22,8 @@ There are no email accounts or passwords. Each device keeps a private access key
 
 **Optional reminders.** The tracking person can receive a notification the day before a scheduled change. The partner can receive notifications when the shared phase changes. Notifications use discreet text without the phase name, and each device opts in separately.
 
+Settings also includes a test reminder you or your linked partner can send to the tracking person's enabled devices, plus seven days of notification diagnostics to help investigate missed reminders.
+
 ## On your phone
 
 Add the app to your Home Screen for an app-like experience. On iPhone and iPad, open the installed app before enabling notifications.
@@ -32,7 +34,7 @@ The last synced status remains available offline. Changes require a connection, 
 
 ## Privacy and limitations
 
-The app stores the selected phase and date, one previous selection for undo, access-key hashes, sharing details, notification subscriptions, and any schedule you enable. It does not collect personal names, symptoms, or analytics, and it does not keep a cycle-history timeline.
+The app stores the selected phase and date, one previous selection for undo, access-key hashes, sharing details, notification subscriptions, any schedule you enable, and up to seven days of notification diagnostics. It does not collect personal names, symptoms, or analytics, and it does not keep a cycle-history timeline.
 
 The tracking person can disconnect their partner or delete the cycle. Anyone with a private access key can use that key's permissions, so keep it private. Hosting and push providers may retain their own logs or backups.
 

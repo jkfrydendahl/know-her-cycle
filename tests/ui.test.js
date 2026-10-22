@@ -6,6 +6,7 @@ import { JSDOM } from 'jsdom';
 import webpush from 'web-push';
 import { createHandler } from '../server/http.js';
 import { memoryStore } from '../server/memory-store.js';
+import { createService } from '../server/domain.js';
 import { PHASES, phaseById } from '../public/phases.js';
 
 const html = await readFile(new URL('../public/index.html', import.meta.url), 'utf8');
@@ -170,4 +171,32 @@ test('owner can save an optional schedule, enable reminders and pause without lo
   assert.equal(owner.$('auto-menstrual').value, '5');
   assert.equal(owner.$('owner-enable-push').hidden, true);
   assert.doesNotMatch(owner.$('since-label').textContent, /Next/);
+});
+
+
+test('partner can send an owner test reminder and inspect results without changing the schedule', async (t) => {
+  const store = memoryStore(), deliveries = [], now = () => new Date('2026-10-22T07:00:00Z');
+  const notify = async (event) => { deliveries.push(event); return { sent: event.subscriptions.length, failed: 0 }; };
+  const service = createService({ store, now, notify });
+  const owner = await service.create('menstrual');
+  await service.automation(owner.token, { version: 1, enabled: true, reminders: true,
+    days: { menstrual: 5, follicular: 8, ovulatory: 3, luteal: 12 }, startDate: '2026-10-22', timeZone: 'Europe/Copenhagen' });
+  const viewer = await service.join((await service.invite(owner.token)).invitation);
+  await service.subscribe(owner.token, sub);
+  const handler = createHandler({ store, env, now, notify });
+  const partner = await device(handler, '', viewer.token); t.after(() => partner.dom.window.close());
+  await until(() => !partner.$('refresh').disabled);
+  partner.$('settings-open').click();
+  assert.equal(partner.$('test-reminder').textContent, 'Send her a test reminder');
+  const before = await service.state(owner.token);
+  partner.$('test-reminder').click();
+  await until(() => partner.$('toast').textContent.includes('accepted by the push service') && !partner.$('test-reminder').disabled);
+  assert.equal(deliveries.length, 1); assert.equal(deliveries[0].type, 'test-reminder');
+  assert.deepEqual(deliveries[0].subscriptions, [sub]);
+  assert.deepEqual(await service.state(owner.token), before);
+  partner.$('notification-diagnostics').open = true;
+  await until(() => partner.$('diagnostic-events').textContent.includes('Test: 1 accepted'));
+  assert.match(partner.$('diagnostic-status').textContent, /1 tracking device/);
+  partner.online(false); partner.w.dispatchEvent(new partner.w.Event('offline'));
+  assert.equal(partner.$('test-reminder').disabled, true);
 });

@@ -82,11 +82,20 @@
         <p id="auto-notification-hint" class="small-note"></p>
       </section>
       <section class="settings-section"><h3 id="role-label">Sharing</h3><p id="sharing-label" class="dialog-copy"></p><button id="invite" class="button secondary">Create partner invitation</button><div id="invite-result" hidden><label for="invite-link">Single-use invitation</label><input id="invite-link" readonly><p id="invite-expiry" class="small-note"></p><button id="copy-invite" class="button secondary">Copy invitation</button><button id="share-invite" class="text-button">Share invitation</button></div><button id="disconnect" class="text-button danger" hidden>Disconnect partner</button></section>
-      <section id="notification-settings" class="settings-section" hidden><h3>Notifications</h3><p id="notification-status" class="dialog-copy"></p><button id="disable-push" class="button secondary">Turn off on this device</button></section>
+      <section id="notification-settings" class="settings-section" hidden><h3>Notifications</h3><p id="notification-status" class="dialog-copy"></p><button id="disable-push" class="button secondary">Turn off on this device</button>
+        <button id="test-reminder" class="button secondary">Send test reminder</button>
+        <p id="test-reminder-hint" class="small-note"></p>
+        <details id="notification-diagnostics"><summary>Notification history · last 7 days</summary>
+          <p class="small-note">Push service acceptance does not confirm that the phone displayed a notification.</p>
+          <button id="refresh-diagnostics" class="text-button" type="button">Refresh history</button>
+          <p id="diagnostic-status" class="small-note" role="status"></p>
+          <ol id="diagnostic-events" class="diagnostic-events"></ol>
+        </details>
+      </section>
       <section class="settings-section"><h3>Keep your access</h3><p class="dialog-copy">Save your private access key somewhere safe before changing phones or clearing browser data. It grants access to this cycle.</p><button id="copy-key" class="button secondary">Copy private access key</button><button id="sign-out" class="text-button">Forget this device</button></section>
       <section id="delete-section" class="settings-section" hidden><h3>Your data</h3><button id="delete-cycle" class="text-button danger">Delete cycle and disconnect all devices</button></section>
     </div>
-    <section class="settings-section about"><h3>Simple, by design.</h3><p class="dialog-copy">Four colors. One shared status. Choose phases yourself, or use an optional schedule based on your own durations. Menstruation is shown separately for simplicity; it is part of the follicular phase.</p><p class="small-note">For shared awareness, not contraception or medical decisions. Everyone experiences their cycle differently.</p><p class="small-note">On iPhone, add to Home Screen before enabling notifications. Notifications use discreet text without the phase name.</p><p class="small-note">Version 1.1.0</p></section>
+    <section class="settings-section about"><h3>Simple, by design.</h3><p class="dialog-copy">Four colors. One shared status. Choose phases yourself, or use an optional schedule based on your own durations. Menstruation is shown separately for simplicity; it is part of the follicular phase.</p><p class="small-note">For shared awareness, not contraception or medical decisions. Everyone experiences their cycle differently.</p><p class="small-note">On iPhone, add to Home Screen before enabling notifications. Notifications use discreet text without the phase name.</p><p class="small-note">Version 1.1.1</p></section>
   </dialog>
   <div id="toast" role="status" aria-live="polite" hidden></div>
   <noscript><p class="noscript">Enable JavaScript to use Know Her Cycle.</p></noscript>

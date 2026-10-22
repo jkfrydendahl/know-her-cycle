@@ -72,3 +72,9 @@
 #automation-form input[type="checkbox"] { width: 1.2rem; height: 1.2rem; flex: 0 0 auto; margin: 0; accent-color: var(--accent); }
 #automation-form fieldset:disabled { opacity: .55; }
 #owner-enable-push { margin-top: 1rem; }
+
+#notification-diagnostics { margin-top: 1.25rem; }
+#notification-diagnostics summary { cursor: pointer; font-size: 14px; line-height: 1.6; }
+.diagnostic-events { list-style: none; margin: 0; padding: 0; }
+.diagnostic-events li { padding: .7rem 0; border-top: 1px solid var(--line); font-size: 13px; line-height: 1.6; overflow-wrap: anywhere; }
+.diagnostic-events time { display: block; color: var(--muted); font-size: 12px; }

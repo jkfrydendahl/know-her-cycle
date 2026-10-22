@@ -50,3 +50,17 @@ test('cron authentication and scheduling configuration are enforced separately f
   assert.equal((await unconfigured('automation', { token: owner.data.token, body: { enabled: true } })).code, 503);
   assert.equal((await unconfigured('automation', { token: owner.data.token, body: { enabled: false, version: 1 } })).code, 200);
 });
+
+test('reminder diagnostics endpoints require authenticated same-origin access and correct methods', async () => {
+  const call = fixture();
+  assert.equal((await call('diagnostics', { method: 'GET' })).code, 401);
+  assert.equal((await call('test-reminder')).code, 401);
+  assert.equal((await call('test-reminder', { method: 'GET' })).code, 405);
+  const owner = await call('create', { body: { phase: 'menstrual' } });
+  assert.equal((await call('test-reminder', { token: owner.data.token, origin: 'https://evil.example' })).code, 403);
+  const result = await call('test-reminder', { token: owner.data.token });
+  assert.equal(result.code, 200); assert.equal(result.data.ownerDevices, 0);
+  const history = await call('diagnostics', { method: 'GET', token: owner.data.token });
+  assert.equal(history.code, 200); assert.equal(history.data.events[0].status, 'no-subscription');
+  assert.equal(history.headers['Cache-Control'], 'no-store');
+});

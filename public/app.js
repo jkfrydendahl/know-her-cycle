@@ -39,7 +39,9 @@ function remember(result) {
 function forget() {
   localStorage.removeItem(SESSION_KEY); localStorage.removeItem(CACHE_KEY);
   token = null; state = null; lastSync = null; stale = true; currentSubscription = null; renderedPhase = null;
-  $('invite-result').hidden = true; $('invite-link').value = ''; render();
+  $('invite-result').hidden = true; $('invite-link').value = '';
+  $('diagnostic-events').replaceChildren(); $('diagnostic-status').textContent = '';
+  $('notification-diagnostics').open = false; render();
 }
 async function run(work) {
   if (busy) return;
@@ -116,6 +118,10 @@ function render() {
   $('automation-settings').hidden = !owner;
   $('auto-save').disabled = busy || stale;
   $('notification-settings').hidden = false;
+  $('test-reminder').disabled = busy || stale;
+  $('refresh-diagnostics').disabled = busy || stale;
+  $('test-reminder').textContent = owner ? 'Send me a test reminder' : 'Send her a test reminder';
+  $('test-reminder-hint').textContent = owner ? 'Sends to your enabled notification devices without changing your schedule.' : 'Sends to her enabled notification devices. Your subscription and the schedule stay as they are.';
   const enabled = Boolean(currentSubscription) && globalThis.Notification?.permission === 'granted';
   buttonContent($('enable-push'), enabled ? 'Notifications enabled' : 'Notify me of changes', enabled ? 'check' : 'arrow');
   $('enable-push').disabled = busy || stale || enabled || !config?.vapidPublicKey;
@@ -212,6 +218,38 @@ async function syncSubscription() {
   } catch { currentSubscription = null; }
   render();
 }
+function diagnosticText(event) {
+  if (event.kind === 'cron-started') return 'Daily job started.';
+  if (event.kind === 'cron-completed') return 'Daily job completed.';
+  if (event.kind === 'cron-errors') return 'Daily job encountered an error.';
+  if (event.kind === 'check-started') return 'Checking this cycle.';
+  if (event.kind === 'check-error') return 'This cycle could not be checked.';
+  if (event.kind === 'test-started') return `Test started · ${event.ownerDevices} tracking device(s) subscribed.`;
+  if (event.kind === 'test-result') {
+    if (event.status === 'no-subscription') return 'Test not sent: no tracking devices subscribed. Enable notifications on her phone.';
+    if (event.status === 'skipped') return 'Test skipped because the cycle or sharing changed.';
+    return `Test: ${event.sent} accepted by push service, ${event.failed} failed.${event.reason ? ` ${event.reason}` : ''}`;
+  }
+  if (event.kind === 'check-result') {
+    let message = event.advanced ? 'Phase advanced automatically. ' : '';
+    if (!event.remindersEnabled) return message + 'Day-before reminders are off.';
+    if (!event.reminderDue) return message + 'No reminder due for tomorrow.';
+    if (event.alreadyAttempted) return message + 'Reminder already attempted; no duplicate sent.';
+    if (!event.ownerDevices) return message + 'Reminder due, but no tracking devices subscribed.';
+    return message + `Reminder due · ${event.ownerDevices} tracking device(s): ${event.reminderSent || 0} accepted, ${event.reminderFailed || 0} failed.${event.reason ? ` ${event.reason}` : ''}`;
+  }
+  return 'Diagnostic event.';
+}
+async function loadDiagnostics() {
+  const result = await request('diagnostics');
+  const entries = [...result.events, ...result.cron].sort((a, b) => Date.parse(b.at) - Date.parse(a.at));
+  $('diagnostic-status').textContent = `${result.ownerDevices} tracking device(s) subscribed. ${result.cron.length ? '' : 'No daily job recorded yet. '}${entries.length ? '' : 'History starts with this update.'}`.trim();
+  $('diagnostic-events').replaceChildren(...entries.map((event) => {
+    const item = document.createElement('li'), time = document.createElement('time'), message = document.createElement('span');
+    time.dateTime = event.at; time.textContent = new Date(event.at).toLocaleString();
+    message.textContent = diagnosticText(event); item.append(time, message); return item;
+  }));
+}
 function populateSchedule() {
   if (state?.role !== 'owner') return;
   const schedule = state.automation;
@@ -260,6 +298,15 @@ function wire() {
   $('owner-enable-push').addEventListener('click', () => run(enablePush));
   $('enable-push').addEventListener('click', () => run(enablePush));
   $('disable-push').addEventListener('click', () => run(disablePush));
+  $('test-reminder').addEventListener('click', () => run(async () => {
+    const result = await request('test-reminder', {}), delivery = result.notification;
+    toast(!result.ownerDevices ? 'No tracking devices subscribed. Enable notifications on her phone first.'
+      : delivery.failed ? `Test reminder: ${delivery.sent} accepted, ${delivery.failed} failed. ${delivery.reason || ''}`
+      : delivery.sent ? 'Test reminder accepted by the push service. Check her enabled devices.' : 'Test skipped because the cycle or sharing changed.', !result.ownerDevices || Boolean(delivery.failed));
+    if ($('notification-diagnostics').open) await loadDiagnostics();
+  }));
+  $('refresh-diagnostics').addEventListener('click', () => run(loadDiagnostics));
+  $('notification-diagnostics').addEventListener('toggle', () => { if ($('notification-diagnostics').open && !busy) run(loadDiagnostics); });
   $('join-form').addEventListener('submit', (event) => { event.preventDefault(); run(async () => {
     const result = await request('join', { invitation: invitationFrom($('invitation').value) }, null);
     remember(result); $('invitation').value = ''; close('join-dialog'); await syncSubscription(); toast('You’re connected.');
