@@ -78,3 +78,8 @@
 .diagnostic-events { list-style: none; margin: 0; padding: 0; }
 .diagnostic-events li { padding: .7rem 0; border-top: 1px solid var(--line); font-size: 13px; line-height: 1.6; overflow-wrap: anywhere; }
 .diagnostic-events time { display: block; color: var(--muted); font-size: 12px; }
+
+.phase-guide { margin: 0; }
+.phase-guide dt { font-size: 14px; font-weight: 600; }
+.phase-guide dd { margin: 4px 0 16px; font-size: 13px; line-height: 1.6; color: var(--muted); }
+.phase-guide dd:last-child { margin-bottom: 0; }

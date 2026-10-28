@@ -40,7 +40,7 @@ test('reminders use an allowlisted message with no supplied phase details or ext
   w.handlers.push({ data: { json: () => ({ type: 'reminder', body: 'private details', url: 'https://evil.example' }) }, waitUntil(promise) { task = promise; } });
   await task;
   assert.equal(w.notifications[0][0], 'Cycle reminder');
-  assert.equal(w.notifications[0][1].body, 'Your next phase is scheduled for tomorrow. Open the app to review it.');
+  assert.equal(w.notifications[0][1].body, 'Your next phase is scheduled for tomorrow.');
   assert.equal(w.notifications[0][1].data.url, '/');
   assert.equal(w.notifications[0][1].tag, 'khc-phase-reminder');
 });

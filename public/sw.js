@@ -1,4 +1,4 @@
-const CACHE = 'khc-shell-v1.1.1-notification-diagnostics';
+const CACHE = 'khc-shell-v1.1.1-phase-guide';
 const SHELL = ['/', '/index.html', '/styles.css', '/app.js', '/phases.js', '/icon.svg', '/icon-192.png', '/icon-512.png', '/apple-touch-icon.png', '/manifest.webmanifest'];
 self.addEventListener('install', (event) => { event.waitUntil(caches.open(CACHE).then((cache) => cache.addAll(SHELL))); });
 self.addEventListener('activate', (event) => {
@@ -18,7 +18,7 @@ self.addEventListener('push', (event) => {
   try { payload = event.data?.json() || {}; } catch { /* Generic fallback. */ }
   event.waitUntil(Promise.all([
     self.registration.showNotification(payload.type === 'test-reminder' ? 'Test reminder' : payload.type === 'reminder' ? 'Cycle reminder' : 'Cycle updated', {
-      body: payload.type === 'test-reminder' ? 'This is a test reminder. No phase change is scheduled by this message.' : payload.type === 'reminder' ? 'Your next phase is scheduled for tomorrow. Open the app to review it.' : 'Open the app to see the latest phase.',
+      body: payload.type === 'test-reminder' ? 'This is a test reminder. No phase change is scheduled by this message.' : payload.type === 'reminder' ? 'Your next phase is scheduled for tomorrow.' : 'Open the app to see the latest phase.',
       icon: '/icon-192.png', badge: '/icon-192.png', tag: payload.type === 'test-reminder' ? 'khc-test-reminder' : payload.type === 'reminder' ? 'khc-phase-reminder' : 'khc-phase-change', data: { url: '/' }
     }),
     self.clients.matchAll({ type: 'window', includeUncontrolled: true }).then((clients) => clients.forEach((client) => client.postMessage({ type: 'phase-updated' })))
