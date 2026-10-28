@@ -38,7 +38,7 @@ export function createNotifier(env = process.env, send = webpush.sendNotificatio
     if (!configuration.details) return { sent: 0, failed: subscriptions.length, reason: configuration.error || 'Push notifications are not configured on the server.' };
     // Generic lock-screen text deliberately contains no phase or cycle identifier.
     const payload = JSON.stringify({ type, title: type === 'test-reminder' ? 'Test reminder' : type === 'reminder' ? 'Cycle reminder' : 'Cycle updated',
-      body: type === 'test-reminder' ? 'This is a test reminder. No phase change is scheduled by this message.' : type === 'reminder' ? 'Your next phase is scheduled for tomorrow. Open the app to review it.' : 'Open the app to see the latest phase.',
+      body: type === 'test-reminder' ? 'This is a test reminder. No phase change is scheduled by this message.' : type === 'reminder' ? 'Your next phase is scheduled for tomorrow.' : 'Open the app to see the latest phase.',
       url: '/', tag: `cycle-update-${version}` });
     const results = await Promise.all(subscriptions.map(async (subscription) => {
       try {
