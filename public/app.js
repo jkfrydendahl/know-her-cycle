@@ -269,7 +269,7 @@ function wire() {
     const title = document.createElement('dt'), description = document.createElement('dd');
     title.textContent = `${phase.name} ${phase.emoji}`; description.textContent = phase.line;
     $('phase-guide').append(title, description);
-    const item = document.createElement('span'); item.className = 'phase-item'; item.textContent = phase.short; $('phase-strip').append(item);
+    const item = document.createElement('span'); item.className = 'phase-item'; item.textContent = phase.name; $('phase-strip').append(item);
     const option = document.createElement('button'); option.type = 'button'; option.className = 'phase-option'; option.dataset.phase = phase.id;
     const label = document.createElement('span'); label.textContent = `${phase.name} ${phase.emoji}`; option.append(label, icon('arrow'));
     option.addEventListener('click', () => run(async () => {
